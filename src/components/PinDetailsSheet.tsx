@@ -83,10 +83,12 @@ export function PinDetailsSheet({ pin, onOpenChange, distance, onEdit, onDelete,
                 else void navigator.clipboard.writeText(text);
               }}
             />
-            <Action icon={<Pencil className="size-4" />} label="Edit" onClick={() => onEdit(pin)} />
+            {canManage ? (
+              <Action icon={<Pencil className="size-4" />} label="Edit" onClick={() => onEdit(pin)} />
+            ) : null}
           </div>
 
-          {canDelete ? (
+          {canManage ? (
             <button
               type="button"
               onClick={() => onDelete(pin)}
