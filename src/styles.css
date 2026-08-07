@@ -238,3 +238,20 @@
 .leaflet-bar a {
   border-radius: 12px !important;
 }
+
+/* Map must never paint above app chrome: clamp Leaflet's internal z-index stack */
+.leaflet-container {
+  z-index: 0 !important;
+  isolation: isolate;
+}
+.leaflet-pane,
+.leaflet-top,
+.leaflet-bottom {
+  z-index: auto !important;
+}
+.leaflet-bottom.leaflet-left {
+  margin-bottom: calc(7.5rem + env(safe-area-inset-bottom));
+}
+.leaflet-control-attribution {
+  margin-bottom: calc(6.25rem + env(safe-area-inset-bottom)) !important;
+}

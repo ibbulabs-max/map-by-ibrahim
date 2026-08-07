@@ -20,7 +20,7 @@ export function BottomNav() {
     : ITEMS;
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <nav className="fixed inset-x-0 bottom-0 z-[1000] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="glass-strong mx-auto flex max-w-md items-stretch justify-between gap-1 rounded-[1.75rem] p-1.5">
         {items.map((item) => {
           const active = pathname === item.to;

@@ -17,7 +17,7 @@ export function PinDetailsSheet({ pin, onOpenChange, distance, onEdit, onDelete,
   if (!pin) return null;
   const def = pinTypeDef(pin.pin_type);
   const Icon = def.icon;
-  const canDelete = isAdmin || pin.user_id === session?.user.id;
+  const canManage = isAdmin || pin.user_id === session?.user.id;
 
   return (
     <Drawer open={Boolean(pin)} onOpenChange={onOpenChange}>
@@ -83,10 +83,12 @@ export function PinDetailsSheet({ pin, onOpenChange, distance, onEdit, onDelete,
                 else void navigator.clipboard.writeText(text);
               }}
             />
-            <Action icon={<Pencil className="size-4" />} label="Edit" onClick={() => onEdit(pin)} />
+            {canManage ? (
+              <Action icon={<Pencil className="size-4" />} label="Edit" onClick={() => onEdit(pin)} />
+            ) : null}
           </div>
 
-          {canDelete ? (
+          {canManage ? (
             <button
               type="button"
               onClick={() => onDelete(pin)}
