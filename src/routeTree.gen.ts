@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedMapRouteImport } from './routes/_authenticated/map'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedRecordsRouteImport } from './routes/_authenticated/records'
@@ -24,6 +25,11 @@ const IndexRoute = IndexRouteImport.update({
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedMapRoute = AuthenticatedMapRouteImport.update({
   id: '/map',
@@ -48,6 +54,7 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AuthenticatedAdminRoute
   '/map': typeof AuthenticatedMapRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/records': typeof AuthenticatedRecordsRoute
@@ -55,6 +62,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AuthenticatedAdminRoute
   '/map': typeof AuthenticatedMapRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/records': typeof AuthenticatedRecordsRoute
@@ -64,6 +72,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
+  '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/map': typeof AuthenticatedMapRoute
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/records': typeof AuthenticatedRecordsRoute
@@ -71,13 +80,14 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/map' | '/profile' | '/records' | '/settings'
+  fullPaths: '/' | '/admin' | '/map' | '/profile' | '/records' | '/settings'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/map' | '/profile' | '/records' | '/settings'
+  to: '/' | '/admin' | '/map' | '/profile' | '/records' | '/settings'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/_authenticated/admin'
     | '/_authenticated/map'
     | '/_authenticated/profile'
     | '/_authenticated/records'
@@ -104,6 +114,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/map': {
       id: '/_authenticated/map'
@@ -137,6 +154,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedMapRoute: typeof AuthenticatedMapRoute
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedRecordsRoute: typeof AuthenticatedRecordsRoute
@@ -144,6 +162,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedMapRoute: AuthenticatedMapRoute,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedRecordsRoute: AuthenticatedRecordsRoute,

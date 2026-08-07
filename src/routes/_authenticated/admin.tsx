@@ -56,7 +56,10 @@ function AdminScreen() {
     mutationFn: () =>
       addUser({ data: { username: username.trim().toLowerCase(), pin, fullName: fullName.trim(), role: "survey_user" } }),
     onSuccess: (res: { ok: boolean; error?: string }) => {
-      if (!res.ok) return toast.error(res.error ?? "Could not create user");
+      if (!res.ok) {
+        toast.error(res.error ?? "Could not create user");
+        return;
+      }
       toast.success("User created");
       setCreating(false);
       setUsername("");
@@ -84,9 +87,9 @@ function AdminScreen() {
         }
       >
         <div className="grid grid-cols-3 gap-2.5">
-          <Stat label="Users" value={stats.data?.users ?? 0} />
-          <Stat label="Pins" value={stats.data?.pins ?? 0} />
-          <Stat label="Today" value={stats.data?.today ?? 0} />
+          <Stat label="Users" value={stats.data?.totalUsers ?? 0} />
+          <Stat label="Pins" value={stats.data?.totalPins ?? 0} />
+          <Stat label="Today" value={stats.data?.todayPins ?? 0} />
         </div>
 
         {creating ? (
@@ -157,7 +160,10 @@ function AdminScreen() {
                   type="button"
                   onClick={() => {
                     void removeUser({ data: { userId: u.id } }).then((res: { ok: boolean; error?: string }) => {
-                      if (!res.ok) return toast.error(res.error ?? "Could not delete");
+                      if (!res.ok) {
+                        toast.error(res.error ?? "Could not delete");
+                        return;
+                      }
                       toast.success("User deleted");
                       invalidate();
                     });
