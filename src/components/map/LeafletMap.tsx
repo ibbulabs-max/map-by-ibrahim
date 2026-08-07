@@ -10,7 +10,6 @@ type Props = {
   pins: Pin[];
   position: GeoPosition | null;
   draft: { lat: number; lng: number } | null;
-  placing: boolean;
   focus: { lat: number; lng: number; id?: string } | null;
   onMapTap: (latlng: { lat: number; lng: number }) => void;
   onDraftMove: (latlng: { lat: number; lng: number }) => void;
@@ -45,7 +44,6 @@ export default function LeafletMap({
   pins,
   position,
   draft,
-  placing,
   focus,
   onMapTap,
   onDraftMove,
@@ -57,11 +55,19 @@ export default function LeafletMap({
   const meRef = useRef<{ marker: L.CircleMarker; circle: L.Circle } | null>(null);
   const draftRef = useRef<L.Marker | null>(null);
   const centeredRef = useRef(false);
-  const tapRef = useRef(onMapTap);
-  const placingRef = useRef(placing);
-  tapRef.current = onMapTap;
-  placingRef.current = placing;
+  const renderRef = useRef<() => void>(() => {});
 
+  // Latest callbacks/data without re-binding map listeners.
+  const tapRef = useRef(onMapTap);
+  const selectRef = useRef(onSelectPin);
+  const draftMoveRef = useRef(onDraftMove);
+  const pinsRef = useRef(pins);
+  tapRef.current = onMapTap;
+  selectRef.current = onSelectPin;
+  draftMoveRef.current = onDraftMove;
+  pinsRef.current = pins;
+
+  // ---- map init (once) ----
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const map = L.map(containerRef.current, {
@@ -69,25 +75,48 @@ export default function LeafletMap({
       zoom: 5,
       zoomControl: false,
       attributionControl: true,
+      preferCanvas: false,
+      tap: true,
+      zoomAnimation: true,
+      markerZoomAnimation: true,
     } as L.MapOptions);
+
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: "© OpenStreetMap",
+      keepBuffer: 4,
+      updateWhenIdle: false,
     }).addTo(map);
+
     L.control.zoom({ position: "bottomleft" }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
+
+    // Any tap on the map drops / moves the temporary marker.
     map.on("click", (e: L.LeafletMouseEvent) => {
-      if (placingRef.current) tapRef.current({ lat: e.latlng.lat, lng: e.latlng.lng });
+      tapRef.current({ lat: e.latlng.lat, lng: e.latlng.lng });
     });
+
     mapRef.current = map;
-    setTimeout(() => map.invalidateSize(), 120);
+
+    const invalidate = () => map.invalidateSize();
+    const t = window.setTimeout(invalidate, 120);
+    window.addEventListener("resize", invalidate);
+    window.addEventListener("orientationchange", invalidate);
+
     return () => {
+      window.clearTimeout(t);
+      window.removeEventListener("resize", invalidate);
+      window.removeEventListener("orientationchange", invalidate);
       map.remove();
       mapRef.current = null;
+      layerRef.current = null;
+      meRef.current = null;
+      draftRef.current = null;
+      centeredRef.current = false;
     };
   }, []);
 
-  // current location
+  // ---- current location (never removed) ----
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !position) return;
@@ -99,6 +128,7 @@ export default function LeafletMap({
         fillColor: "oklch(0.58 0.19 259)",
         fillOpacity: 0.12,
         weight: 1,
+        interactive: false,
       }).addTo(map);
       const marker = L.circleMarker(latlng, {
         radius: 8,
@@ -106,6 +136,7 @@ export default function LeafletMap({
         weight: 3,
         fillColor: "oklch(0.55 0.2 259)",
         fillOpacity: 1,
+        interactive: false,
       }).addTo(map);
       meRef.current = { marker, circle };
     } else {
@@ -118,25 +149,33 @@ export default function LeafletMap({
     }
   }, [position]);
 
-  // pins + clustering
+  // ---- pins + clustering ----
   useEffect(() => {
     const map = mapRef.current;
     const layer = layerRef.current;
     if (!map || !layer) return;
 
-    const render = () => {
-      layer.clearLayers();
+    let frame = 0;
+    let lastKey = "";
+
+    const draw = () => {
       const zoom = map.getZoom();
+      const list = pinsRef.current;
+      const key = `${zoom}:${list.length}:${list[0]?.id ?? ""}:${list[0]?.updated_at ?? ""}`;
+      if (key === lastKey) return;
+      lastKey = key;
+
+      layer.clearLayers();
       const cell = zoom >= 17 ? 0 : 0.6 / 2 ** (zoom - 4);
       const groups = new Map<string, Pin[]>();
-      for (const pin of pins) {
-        const key =
+      for (const pin of list) {
+        const gkey =
           cell === 0
             ? pin.id
             : `${Math.round(pin.latitude / cell)}:${Math.round(pin.longitude / cell)}`;
-        const list = groups.get(key);
-        if (list) list.push(pin);
-        else groups.set(key, [pin]);
+        const g = groups.get(gkey);
+        if (g) g.push(pin);
+        else groups.set(gkey, [pin]);
       }
       for (const group of groups.values()) {
         if (group.length === 1) {
@@ -149,7 +188,10 @@ export default function LeafletMap({
               iconAnchor: [17, 30],
             }),
           })
-            .on("click", () => onSelectPin(pin))
+            .on("click", (e) => {
+              L.DomEvent.stopPropagation(e as unknown as Event);
+              selectRef.current(pin);
+            })
             .addTo(layer);
         } else {
           const lat = group.reduce((s, p) => s + p.latitude, 0) / group.length;
@@ -157,20 +199,39 @@ export default function LeafletMap({
           L.marker([lat, lng], {
             icon: L.divIcon({ html: clusterHtml(group.length), className: "", iconSize: [42, 42] }),
           })
-            .on("click", () => map.flyTo([lat, lng], Math.min(19, map.getZoom() + 3)))
+            .on("click", (e) => {
+              L.DomEvent.stopPropagation(e as unknown as Event);
+              map.flyTo([lat, lng], Math.min(19, map.getZoom() + 3));
+            })
             .addTo(layer);
         }
       }
     };
 
-    render();
-    map.on("zoomend", render);
-    return () => {
-      map.off("zoomend", render);
+    const schedule = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(draw);
     };
-  }, [pins, onSelectPin]);
 
-  // draft marker
+    renderRef.current = () => {
+      lastKey = "";
+      schedule();
+    };
+
+    renderRef.current();
+    map.on("zoomend", schedule);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      map.off("zoomend", schedule);
+    };
+  }, []);
+
+  // redraw when pin data changes
+  useEffect(() => {
+    renderRef.current();
+  }, [pins]);
+
+  // ---- draft marker ----
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -182,6 +243,7 @@ export default function LeafletMap({
     if (!draftRef.current) {
       const marker = L.marker([draft.lat, draft.lng], {
         draggable: true,
+        autoPan: true,
         icon: L.divIcon({
           className: "",
           iconSize: [40, 40],
@@ -193,19 +255,19 @@ export default function LeafletMap({
       }).addTo(map);
       marker.on("dragend", () => {
         const p = marker.getLatLng();
-        onDraftMove({ lat: p.lat, lng: p.lng });
+        draftMoveRef.current({ lat: p.lat, lng: p.lng });
       });
       draftRef.current = marker;
     } else {
       draftRef.current.setLatLng([draft.lat, draft.lng]);
     }
-  }, [draft, onDraftMove]);
+  }, [draft]);
 
-  // external focus
+  // ---- external focus ----
   useEffect(() => {
     if (!focus || !mapRef.current) return;
     mapRef.current.flyTo([focus.lat, focus.lng], 18, { duration: 0.9 });
   }, [focus]);
 
-  return <div ref={containerRef} className="absolute inset-0" />;
+  return <div ref={containerRef} className="absolute inset-0 z-0" />;
 }
