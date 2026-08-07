@@ -69,7 +69,6 @@ export default function LeafletMap({
       zoom: 5,
       zoomControl: false,
       attributionControl: true,
-around: true,
     } as L.MapOptions);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
