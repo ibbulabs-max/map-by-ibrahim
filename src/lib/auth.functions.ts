@@ -50,13 +50,3 @@ export const seedDefaultUsers = createServerFn({ method: "POST" }).handler(async
   const { ensureSeedUsers } = await import("./auth.server");
   return ensureSeedUsers();
 });
-
-export const changeOwnPin = createServerFn({ method: "POST" })
-  .inputValidator((data: unknown) =>
-    z.object({ currentPin: z.string().regex(/^\d{6}$/), newPin: z.string().regex(/^\d{6}$/) }).parse(data),
-  )
-  .handler(async ({ data }) => {
-    const { requireSupabaseAuth } = await import("@/integrations/supabase/auth-middleware");
-    void requireSupabaseAuth;
-    return { ok: false as const, error: "unsupported" };
-  });
