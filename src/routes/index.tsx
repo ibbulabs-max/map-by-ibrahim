@@ -211,9 +211,6 @@ function LoginScreen() {
         </div>
       </motion.div>
 
-      <p className="z-10 mt-6 text-center text-[11px] leading-relaxed text-muted-foreground">
-        Demo accounts · admin1 / 950534 · chw1 / 950534
-      </p>
     </div>
   );
 }
