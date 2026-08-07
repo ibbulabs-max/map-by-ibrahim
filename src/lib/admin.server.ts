@@ -117,10 +117,15 @@ export async function updateSurveyUser(input: {
   role?: "admin" | "survey_user" | undefined;
 }) {
   const db = await admin();
-  const patch: Record<string, unknown> = {};
-  if (input.fullName !== undefined) patch["full_name"] = input.fullName;
-  if (input.phone !== undefined) patch["phone"] = input.phone;
-  if (input.isActive !== undefined) patch["is_active"] = input.isActive;
+  const patch: {
+    full_name?: string | null;
+    phone?: string | null;
+    is_active?: boolean;
+  } = {};
+  if (input.fullName !== undefined) patch.full_name = input.fullName;
+  if (input.phone !== undefined) patch.phone = input.phone;
+  if (input.isActive !== undefined) patch.is_active = input.isActive;
+
   if (Object.keys(patch).length) {
     const { error } = await db.from("profiles").update(patch).eq("id", input.userId);
     if (error) return { ok: false as const, error: error.message };
