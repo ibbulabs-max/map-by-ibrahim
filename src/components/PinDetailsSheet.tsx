@@ -17,7 +17,7 @@ export function PinDetailsSheet({ pin, onOpenChange, distance, onEdit, onDelete,
   if (!pin) return null;
   const def = pinTypeDef(pin.pin_type);
   const Icon = def.icon;
-  const canDelete = isAdmin || pin.user_id === session?.user.id;
+  const canManage = isAdmin || pin.user_id === session?.user.id;
 
   return (
     <Drawer open={Boolean(pin)} onOpenChange={onOpenChange}>

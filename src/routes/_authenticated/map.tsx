@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Crosshair, Loader2, MapPin, Plus, X } from "lucide-react";
+import { Crosshair, Loader2, MapPin, Plus, RefreshCw, X } from "lucide-react";
 import { Suspense, lazy, useCallback, useState } from "react";
 import { toast } from "sonner";
 
@@ -27,7 +27,7 @@ export const Route = createFileRoute("/_authenticated/map")({
 
 function MapScreen() {
   const { session, profile } = useAuth();
-  const { position, error: geoError } = useGeolocation();
+  const { position, error: geoError, retry } = useGeolocation();
   const { data: pins = [] } = usePins();
   const savePin = useSavePin();
   const deletePin = useDeletePin();
@@ -39,21 +39,30 @@ function MapScreen() {
   const [selected, setSelected] = useState<Pin | null>(null);
   const [focus, setFocus] = useState<{ lat: number; lng: number } | null>(null);
 
+  // Any tap on the map drops a temporary draggable marker and opens the sheet.
   const handleTap = useCallback((latlng: { lat: number; lng: number }) => {
+    setEditing(null);
     setDraft(latlng);
+    setPlacing(true);
     setFormOpen(true);
   }, []);
 
   const handleSelect = useCallback((pin: Pin) => setSelected(pin), []);
 
+  function resetPlacing() {
+    setFormOpen(false);
+    setPlacing(false);
+    setDraft(null);
+    setEditing(null);
+  }
+
   function startPlacing() {
     setEditing(null);
+    setPlacing(true);
     if (position) {
       setDraft({ lat: position.lat, lng: position.lng });
-      setPlacing(true);
       setFormOpen(true);
     } else {
-      setPlacing(true);
       toast.info("Tap the map to drop a pin");
     }
   }
@@ -70,10 +79,7 @@ function MapScreen() {
       {
         onSuccess: () => {
           toast.success(editing ? "Pin updated" : "Pin saved");
-          setFormOpen(false);
-          setPlacing(false);
-          setDraft(null);
-          setEditing(null);
+          resetPlacing();
         },
         onError: (e) => toast.error(e.message),
       },
@@ -82,34 +88,35 @@ function MapScreen() {
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-muted">
-      <Suspense
-        fallback={
-          <div className="grid h-full place-items-center">
-            <Loader2 className="size-6 animate-spin text-primary" />
-          </div>
-        }
-      >
-        <LeafletMap
-          pins={pins}
-          position={position}
-          draft={draft}
-          placing={placing}
-          focus={focus}
-          onMapTap={handleTap}
-          onDraftMove={setDraft}
-          onSelectPin={handleSelect}
-        />
-      </Suspense>
+      <div className="absolute inset-0 z-0">
+        <Suspense
+          fallback={
+            <div className="grid h-full place-items-center">
+              <Loader2 className="size-6 animate-spin text-primary" />
+            </div>
+          }
+        >
+          <LeafletMap
+            pins={pins}
+            position={position}
+            draft={draft}
+            focus={focus}
+            onMapTap={handleTap}
+            onDraftMove={setDraft}
+            onSelectPin={handleSelect}
+          />
+        </Suspense>
+      </div>
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="glass pointer-events-auto flex items-center justify-between rounded-3xl px-4 py-3">
           <div>
             <p className="text-[15px] font-semibold leading-tight">Survey Map</p>
             <p className="text-[12px] text-muted-foreground">
-              {geoError
-                ? "Location unavailable"
-                : position
-                  ? `±${Math.round(position.accuracy)} m · ${pins.length} pins`
+              {position
+                ? `±${Math.round(position.accuracy)} m · ${pins.length} pins`
+                : geoError
+                  ? "Location unavailable"
                   : "Locating…"}
             </p>
           </div>
@@ -119,16 +126,28 @@ function MapScreen() {
           </span>
         </div>
 
+        {geoError && !position ? (
+          <div className="glass pointer-events-auto mt-2 flex items-center justify-between gap-3 rounded-2xl px-4 py-2.5">
+            <p className="text-[12px] font-medium text-muted-foreground">{geoError}</p>
+            <button
+              type="button"
+              onClick={retry}
+              className="press flex shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1.5 text-[12px] font-semibold text-primary"
+            >
+              <RefreshCw className="size-3.5" />
+              Retry
+            </button>
+          </div>
+        ) : null}
+
         {placing && !formOpen ? (
           <div className="glass pointer-events-auto mt-2 flex items-center justify-between rounded-2xl px-4 py-2.5">
             <p className="text-[13px] font-medium">Tap the map to place your pin</p>
             <button
               type="button"
-              onClick={() => {
-                setPlacing(false);
-                setDraft(null);
-              }}
+              onClick={resetPlacing}
               className="press grid size-7 place-items-center rounded-full bg-card"
+              aria-label="Exit add pin mode"
             >
               <X className="size-4" />
             </button>
@@ -139,7 +158,7 @@ function MapScreen() {
       <button
         type="button"
         onClick={() => position && setFocus({ lat: position.lat, lng: position.lng })}
-        className="press glass absolute bottom-40 right-4 z-30 grid size-12 place-items-center rounded-2xl text-primary"
+        className="press glass absolute bottom-44 right-4 z-30 grid size-12 place-items-center rounded-2xl text-primary"
         aria-label="Center on my location"
       >
         <Crosshair className="size-5" />
@@ -148,7 +167,7 @@ function MapScreen() {
       <button
         type="button"
         onClick={startPlacing}
-        className="press absolute bottom-24 right-4 z-30 grid size-16 place-items-center rounded-[1.5rem] bg-primary-gradient text-primary-foreground shadow-[var(--shadow-float)]"
+        className="press glass-strong absolute bottom-28 right-4 z-30 grid size-16 place-items-center rounded-full text-primary shadow-[var(--shadow-float)]"
         aria-label="Add pin"
       >
         <Plus className="size-7" strokeWidth={2.6} />
@@ -157,12 +176,8 @@ function MapScreen() {
       <PinFormSheet
         open={formOpen}
         onOpenChange={(open) => {
-          setFormOpen(open);
-          if (!open) {
-            setPlacing(false);
-            setDraft(null);
-            setEditing(null);
-          }
+          if (open) setFormOpen(true);
+          else resetPlacing();
         }}
         coords={draft}
         accuracy={position?.accuracy ?? null}
