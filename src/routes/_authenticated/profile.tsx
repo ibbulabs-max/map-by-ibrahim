@@ -60,7 +60,7 @@ function ProfileScreen() {
 
   return (
     <>
-      <ScreenShell title="Profile" subtitle={profile?.username ? `@${profile.username}` : undefined}>
+      <ScreenShell title="Profile" subtitle={profile?.username ? `@${profile.username}` : ""}>
         <GlassCard className="flex items-center gap-4 px-5 py-5">
           <span className="grid size-16 place-items-center rounded-3xl bg-primary-gradient text-primary-foreground shadow-[var(--shadow-float)]">
             <UserRound className="size-7" />
