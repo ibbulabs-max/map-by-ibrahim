@@ -224,6 +224,11 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin_like: { Args: { _user_id: string }; Returns: boolean }
+      is_supervisor_of: {
+        Args: { _csw_id: string; _supervisor_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "survey_user" | "super_admin" | "supervisor"
