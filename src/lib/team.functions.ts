@@ -74,3 +74,40 @@ export const assignSupervisor = createServerFn({ method: "POST" })
     await t.assertAdminLike(context.userId);
     return t.setSupervisor(data.cswId, data.supervisorId);
   });
+
+/** People the caller may filter maps/records by (admins: everyone, supervisors: their team). */
+export const teamPeople = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const t = await import("./team.server");
+    const role = await t.roleOf(context.userId);
+    if (role === "admin" || role === "super_admin") {
+      const [supervisors, all] = await Promise.all([t.fetchSupervisors(), t.fetchAllPeople()]);
+      return {
+        scope: "admin" as const,
+        supervisors: supervisors.map((s) => ({ id: s.id, name: s.full_name || s.username })),
+        people: all
+          .filter((p) => p.role === "survey_user")
+          .map((p) => ({
+            id: p.id,
+            name: p.full_name || p.username,
+            username: p.username,
+            supervisor_id: p.supervisor_id,
+          })),
+      };
+    }
+    if (role === "supervisor") {
+      const members = await t.fetchTeamMembers(context.userId);
+      return {
+        scope: "supervisor" as const,
+        supervisors: [],
+        people: members.map((p) => ({
+          id: p.id,
+          name: p.full_name || p.username,
+          username: p.username,
+          supervisor_id: p.supervisor_id,
+        })),
+      };
+    }
+    return { scope: "csw" as const, supervisors: [], people: [] };
+  });

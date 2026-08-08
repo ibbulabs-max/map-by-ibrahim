@@ -148,7 +148,7 @@ async function memberships() {
 }
 
 /** Every person with role + team + stats, ready for filtering. */
-async function allPeople(): Promise<TeamPerson[]> {
+export async function fetchAllPeople(): Promise<TeamPerson[]> {
   const [profiles, roles, pins, links] = await Promise.all([
     profileMap(),
     roleMap(),
@@ -182,7 +182,7 @@ export type SupervisorSummary = TeamPerson & {
 };
 
 export async function fetchSupervisors(): Promise<SupervisorSummary[]> {
-  const people = await allPeople();
+  const people = await fetchAllPeople();
   return people
     .filter((p) => p.role === "supervisor")
     .map((s) => {
@@ -196,17 +196,17 @@ export async function fetchSupervisors(): Promise<SupervisorSummary[]> {
 }
 
 export async function fetchTeamMembers(supervisorId: string): Promise<TeamPerson[]> {
-  const people = await allPeople();
+  const people = await fetchAllPeople();
   return people.filter((p) => p.supervisor_id === supervisorId);
 }
 
 export async function fetchUnassignedCsws(): Promise<TeamPerson[]> {
-  const people = await allPeople();
+  const people = await fetchAllPeople();
   return people.filter((p) => p.role === "survey_user" && !p.supervisor_id);
 }
 
 export async function fetchPerson(userId: string): Promise<TeamPerson | null> {
-  const people = await allPeople();
+  const people = await fetchAllPeople();
   return people.find((p) => p.id === userId) ?? null;
 }
 

@@ -18,6 +18,7 @@ import { Route as AuthenticatedRecordsRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedTeamIndexRouteImport } from './routes/_authenticated/team.index'
 import { Route as AuthenticatedTeamCswCswIdRouteImport } from './routes/_authenticated/team.csw.$cswId'
+import { Route as AuthenticatedTeamSupervisorSupervisorIdRouteImport } from './routes/_authenticated/team.supervisor.$supervisorId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -64,6 +65,12 @@ const AuthenticatedTeamCswCswIdRoute =
     path: '/team/csw/$cswId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedTeamSupervisorSupervisorIdRoute =
+  AuthenticatedTeamSupervisorSupervisorIdRouteImport.update({
+    id: '/team/supervisor/$supervisorId',
+    path: '/team/supervisor/$supervisorId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -74,6 +81,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsRoute
   '/team/': typeof AuthenticatedTeamIndexRoute
   '/team/csw/$cswId': typeof AuthenticatedTeamCswCswIdRoute
+  '/team/supervisor/$supervisorId': typeof AuthenticatedTeamSupervisorSupervisorIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -84,6 +92,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsRoute
   '/team': typeof AuthenticatedTeamIndexRoute
   '/team/csw/$cswId': typeof AuthenticatedTeamCswCswIdRoute
+  '/team/supervisor/$supervisorId': typeof AuthenticatedTeamSupervisorSupervisorIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -96,6 +105,7 @@ export interface FileRoutesById {
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/team/': typeof AuthenticatedTeamIndexRoute
   '/_authenticated/team/csw/$cswId': typeof AuthenticatedTeamCswCswIdRoute
+  '/_authenticated/team/supervisor/$supervisorId': typeof AuthenticatedTeamSupervisorSupervisorIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/team/'
     | '/team/csw/$cswId'
+    | '/team/supervisor/$supervisorId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/team'
     | '/team/csw/$cswId'
+    | '/team/supervisor/$supervisorId'
   id:
     | '__root__'
     | '/'
@@ -129,6 +141,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings'
     | '/_authenticated/team/'
     | '/_authenticated/team/csw/$cswId'
+    | '/_authenticated/team/supervisor/$supervisorId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -201,6 +214,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTeamCswCswIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/team/supervisor/$supervisorId': {
+      id: '/_authenticated/team/supervisor/$supervisorId'
+      path: '/team/supervisor/$supervisorId'
+      fullPath: '/team/supervisor/$supervisorId'
+      preLoaderRoute: typeof AuthenticatedTeamSupervisorSupervisorIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -212,6 +232,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTeamIndexRoute: typeof AuthenticatedTeamIndexRoute
   AuthenticatedTeamCswCswIdRoute: typeof AuthenticatedTeamCswCswIdRoute
+  AuthenticatedTeamSupervisorSupervisorIdRoute: typeof AuthenticatedTeamSupervisorSupervisorIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -222,6 +243,8 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTeamIndexRoute: AuthenticatedTeamIndexRoute,
   AuthenticatedTeamCswCswIdRoute: AuthenticatedTeamCswCswIdRoute,
+  AuthenticatedTeamSupervisorSupervisorIdRoute:
+    AuthenticatedTeamSupervisorSupervisorIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
