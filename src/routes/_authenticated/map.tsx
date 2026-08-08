@@ -1,5 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Crosshair, Loader2, MapPin, Plus, RefreshCw, X } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { Crosshair, Loader2, MapPin, Plus, RefreshCw, Users, X } from "lucide-react";
 import { Suspense, lazy, useCallback, useState } from "react";
 import { toast } from "sonner";
 
@@ -10,10 +12,16 @@ import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeletePin, usePins, useSavePin, type PinDraft } from "@/hooks/usePins";
 import { distanceMeters, type Pin } from "@/lib/pin-types";
+import { teamPeople } from "@/lib/team.functions";
 
 const LeafletMap = lazy(() => import("@/components/map/LeafletMap"));
 
 export const Route = createFileRoute("/_authenticated/map")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    user: typeof search["user"] === "string" ? (search["user"] as string) : undefined,
+    supervisor:
+      typeof search["supervisor"] === "string" ? (search["supervisor"] as string) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Survey Map — Smart Survey Map" },
@@ -26,9 +34,35 @@ export const Route = createFileRoute("/_authenticated/map")({
 });
 
 function MapScreen() {
-  const { session, profile } = useAuth();
+  const { session, profile, isAdmin, isSupervisor } = useAuth();
+  const search = Route.useSearch();
+  const navigate = useNavigate();
+  const fetchPeople = useServerFn(teamPeople);
+  const peopleQuery = useQuery({
+    queryKey: ["team", "people"],
+    queryFn: () => fetchPeople({ data: undefined }),
+    enabled: isAdmin || isSupervisor,
+  });
+  const people = peopleQuery.data?.people ?? [];
   const { position, error: geoError, retry } = useGeolocation();
-  const { data: pins = [] } = usePins();
+  const { data: allPins = [] } = usePins();
+
+  const teamIds = search.supervisor
+    ? new Set(people.filter((p) => p.supervisor_id === search.supervisor).map((p) => p.id))
+    : null;
+  const pins = allPins.filter((pin) => {
+    if (search.user) return pin.user_id === search.user;
+    if (teamIds) return teamIds.has(pin.user_id);
+    return true;
+  });
+  const focusPerson = people.find((p) => p.id === search.user);
+  const counters = {
+    total: pins.length,
+    house: pins.filter((p) => p.pin_type === "house").length,
+    shop: pins.filter((p) => p.pin_type === "shop").length,
+    locked: pins.filter((p) => p.pin_type === "locked_house").length,
+    refused: pins.filter((p) => p.pin_type === "refused").length,
+  };
   const savePin = useSavePin();
   const deletePin = useDeletePin();
 
@@ -87,7 +121,7 @@ function MapScreen() {
   }
 
   return (
-    <div className="relative h-dvh w-full overflow-hidden bg-muted">
+    <div className="relative h-dvh w-full overflow-hidden bg-muted md:pl-60">
       <div className="absolute inset-0 z-0">
         <Suspense
           fallback={
@@ -125,6 +159,61 @@ function MapScreen() {
             {pins.length}
           </span>
         </div>
+
+        {isAdmin || isSupervisor ? (
+          <div className="glass pointer-events-auto mt-2 flex items-center gap-2 rounded-2xl px-3 py-2.5">
+            <Users className="size-4 shrink-0 text-muted-foreground" />
+            <select
+              value={search.user ?? ""}
+              onChange={(e) =>
+                void navigate({
+                  to: "/map",
+                  search: e.target.value ? { user: e.target.value } : {},
+                })
+              }
+              className="w-full bg-transparent text-[13px] font-medium outline-none"
+            >
+              <option value="">All team members</option>
+              {people.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.username.toUpperCase()} — {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
+        {search.user || search.supervisor ? (
+          <div className="glass pointer-events-auto mt-2 flex items-center justify-between gap-3 rounded-2xl px-4 py-2.5">
+            <p className="truncate text-[12px] font-medium">
+              Viewing: {focusPerson ? `${focusPerson.name} (${focusPerson.username.toUpperCase()})` : "Team"}
+            </p>
+            <button
+              type="button"
+              onClick={() => void navigate({ to: "/map", search: {} })}
+              className="press shrink-0 rounded-full bg-primary/10 px-3 py-1.5 text-[12px] font-semibold text-primary"
+            >
+              Clear Filter
+            </button>
+          </div>
+        ) : null}
+
+        {isAdmin || isSupervisor ? (
+          <div className="glass pointer-events-auto mt-2 grid grid-cols-5 gap-1 rounded-2xl px-3 py-2 text-center">
+            {[
+              ["Pins", counters.total],
+              ["Houses", counters.house],
+              ["Shops", counters.shop],
+              ["Locked", counters.locked],
+              ["Refused", counters.refused],
+            ].map(([label, value]) => (
+              <div key={String(label)}>
+                <p className="text-[14px] font-semibold">{value}</p>
+                <p className="text-[10px] text-muted-foreground">{label}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         {geoError && !position ? (
           <div className="glass pointer-events-auto mt-2 flex items-center justify-between gap-3 rounded-2xl px-4 py-2.5">

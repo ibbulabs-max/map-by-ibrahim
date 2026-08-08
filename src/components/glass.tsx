@@ -37,7 +37,7 @@ export function ScreenShell({
   className?: string;
 }) {
   return (
-    <div className="min-h-dvh bg-sky-gradient pb-28">
+    <div className="min-h-dvh bg-sky-gradient pb-28 md:pb-10 md:pl-60">
       <header className="sticky top-0 z-30 glass rounded-b-3xl px-5 pt-[max(1rem,env(safe-area-inset-top))] pb-4">
         <div className="flex items-end justify-between gap-3">
           <div>
