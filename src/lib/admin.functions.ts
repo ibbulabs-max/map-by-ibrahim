@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { pinSchema, usernameSchema } from "./auth.shared";
 
-const roleSchema = z.enum(["admin", "survey_user"]);
+const roleSchema = z.enum(["super_admin", "admin", "supervisor", "survey_user"]);
 
 export const listUsers = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -31,13 +31,17 @@ export const createUser = createServerFn({ method: "POST" })
         pin: pinSchema,
         fullName: z.string().trim().max(80).optional(),
         phone: z.string().trim().max(24).optional(),
+        email: z.string().trim().email().max(255).optional().or(z.literal("")),
         role: roleSchema,
+        supervisorId: z.string().uuid().nullable().optional(),
+        isActive: z.boolean().optional(),
       })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { assertAdmin, createSurveyUser } = await import("./admin.server");
-    await assertAdmin(context.supabase, context.userId);
+    const { assertAdmin, assertCanManageRole, createSurveyUser } = await import("./admin.server");
+    const actor = await assertAdmin(context.supabase, context.userId);
+    assertCanManageRole(actor, data.role);
     return createSurveyUser(data);
   });
 
@@ -49,14 +53,16 @@ export const updateUser = createServerFn({ method: "POST" })
         userId: z.string().uuid(),
         fullName: z.string().trim().max(80).nullable().optional(),
         phone: z.string().trim().max(24).nullable().optional(),
+        email: z.string().trim().max(255).nullable().optional(),
         isActive: z.boolean().optional(),
         role: roleSchema.optional(),
       })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { assertAdmin, updateSurveyUser } = await import("./admin.server");
-    await assertAdmin(context.supabase, context.userId);
+    const { assertAdmin, assertCanManageRole, updateSurveyUser } = await import("./admin.server");
+    const actor = await assertAdmin(context.supabase, context.userId);
+    if (data.role) assertCanManageRole(actor, data.role);
     return updateSurveyUser(data);
   });
 

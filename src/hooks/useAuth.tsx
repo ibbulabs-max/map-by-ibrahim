@@ -2,12 +2,14 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "@/integrations/supabase/client";
+import { isAdminRole, type AppRole } from "@/lib/roles";
 
 export type Profile = {
   id: string;
   username: string;
   full_name: string | null;
   phone: string | null;
+  email: string | null;
   avatar_url: string | null;
   is_active: boolean;
 };
@@ -15,8 +17,14 @@ export type Profile = {
 type AuthState = {
   session: Session | null;
   profile: Profile | null;
-  role: "admin" | "survey_user" | null;
+  role: AppRole | null;
+  /** true for admin AND super admin */
   isAdmin: boolean;
+  isSuperAdmin: boolean;
+  isSupervisor: boolean;
+  isCsw: boolean;
+  /** for a CSW: the id of their connected supervisor */
+  supervisorId: string | null;
   loading: boolean;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -27,16 +35,19 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [role, setRole] = useState<"admin" | "survey_user" | null>(null);
+  const [role, setRole] = useState<AppRole | null>(null);
+  const [supervisorId, setSupervisorId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function loadDetails(userId: string) {
-    const [{ data: p }, { data: r }] = await Promise.all([
+    const [{ data: p }, { data: r }, { data: t }] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
       supabase.from("user_roles").select("role").eq("user_id", userId).maybeSingle(),
+      supabase.from("team_memberships").select("supervisor_id").eq("csw_id", userId).maybeSingle(),
     ]);
     setProfile((p as Profile) ?? null);
-    setRole((r?.role as "admin" | "survey_user") ?? "survey_user");
+    setRole((r?.role as AppRole) ?? "survey_user");
+    setSupervisorId(t?.supervisor_id ?? null);
   }
 
   useEffect(() => {
@@ -48,6 +59,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!next) {
         setProfile(null);
         setRole(null);
+        setSupervisorId(null);
       }
     });
 
@@ -73,7 +85,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       profile,
       role,
-      isAdmin: role === "admin",
+      isAdmin: isAdminRole(role),
+      isSuperAdmin: role === "super_admin",
+      isSupervisor: role === "supervisor",
+      isCsw: role === "survey_user",
+      supervisorId,
       loading,
       refresh: async () => {
         if (session?.user.id) await loadDetails(session.user.id);
@@ -83,9 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(null);
         setProfile(null);
         setRole(null);
+        setSupervisorId(null);
       },
     }),
-    [session, profile, role, loading],
+    [session, profile, role, supervisorId, loading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

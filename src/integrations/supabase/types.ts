@@ -123,6 +123,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          email: string | null
           full_name: string | null
           id: string
           is_active: boolean
@@ -133,6 +134,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          email?: string | null
           full_name?: string | null
           id: string
           is_active?: boolean
@@ -143,6 +145,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
+          email?: string | null
           full_name?: string | null
           id?: string
           is_active?: boolean
@@ -151,6 +154,48 @@ export type Database = {
           username?: string
         }
         Relationships: []
+      }
+      team_memberships: {
+        Row: {
+          created_at: string
+          csw_id: string
+          id: string
+          status: string
+          supervisor_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          csw_id: string
+          id?: string
+          status?: string
+          supervisor_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          csw_id?: string
+          id?: string
+          status?: string
+          supervisor_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_memberships_csw_id_fkey"
+            columns: ["csw_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_memberships_supervisor_id_fkey"
+            columns: ["supervisor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
@@ -182,9 +227,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin_like: { Args: { _user_id: string }; Returns: boolean }
+      is_supervisor_of: {
+        Args: { _csw_id: string; _supervisor_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      app_role: "admin" | "survey_user"
+      app_role: "admin" | "survey_user" | "super_admin" | "supervisor"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -312,7 +362,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "survey_user"],
+      app_role: ["admin", "survey_user", "super_admin", "supervisor"],
     },
   },
 } as const

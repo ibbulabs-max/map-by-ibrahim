@@ -1,9 +1,29 @@
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { supabase } from "@/integrations/supabase/client";
 import type { Pin } from "@/lib/pin-types";
 
+/** Subscribes once to pin changes and refreshes every pin-driven view. */
+export function usePinsRealtime() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const channel = supabase
+      .channel("pins-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "pins" }, () => {
+        void qc.invalidateQueries({ queryKey: ["pins"] });
+        void qc.invalidateQueries({ queryKey: ["team"] });
+        void qc.invalidateQueries({ queryKey: ["admin"] });
+      })
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [qc]);
+}
+
 export function usePins() {
+  usePinsRealtime();
   return useQuery({
     queryKey: ["pins"],
     queryFn: async (): Promise<Pin[]> => {
@@ -67,7 +87,10 @@ export function useSavePin() {
       });
       if (error) throw error;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["pins"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["pins"] });
+      void qc.invalidateQueries({ queryKey: ["team"] });
+    },
   });
 }
 
@@ -78,6 +101,9 @@ export function useDeletePin() {
       const { error } = await supabase.from("pins").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["pins"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["pins"] });
+      void qc.invalidateQueries({ queryKey: ["team"] });
+    },
   });
 }
