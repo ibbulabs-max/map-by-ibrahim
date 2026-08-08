@@ -17,6 +17,7 @@ import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticate
 import { Route as AuthenticatedRecordsRouteImport } from './routes/_authenticated/records'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedTeamIndexRouteImport } from './routes/_authenticated/team.index'
+import { Route as AuthenticatedTeamCswCswIdRouteImport } from './routes/_authenticated/team.csw.$cswId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -57,6 +58,12 @@ const AuthenticatedTeamIndexRoute = AuthenticatedTeamIndexRouteImport.update({
   path: '/team/',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedTeamCswCswIdRoute =
+  AuthenticatedTeamCswCswIdRouteImport.update({
+    id: '/team/csw/$cswId',
+    path: '/team/csw/$cswId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -66,6 +73,7 @@ export interface FileRoutesByFullPath {
   '/records': typeof AuthenticatedRecordsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/team/': typeof AuthenticatedTeamIndexRoute
+  '/team/csw/$cswId': typeof AuthenticatedTeamCswCswIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -75,6 +83,7 @@ export interface FileRoutesByTo {
   '/records': typeof AuthenticatedRecordsRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/team': typeof AuthenticatedTeamIndexRoute
+  '/team/csw/$cswId': typeof AuthenticatedTeamCswCswIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,13 +95,29 @@ export interface FileRoutesById {
   '/_authenticated/records': typeof AuthenticatedRecordsRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/team/': typeof AuthenticatedTeamIndexRoute
+  '/_authenticated/team/csw/$cswId': typeof AuthenticatedTeamCswCswIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/admin' | '/map' | '/profile' | '/records' | '/settings' | '/team/'
+    | '/'
+    | '/admin'
+    | '/map'
+    | '/profile'
+    | '/records'
+    | '/settings'
+    | '/team/'
+    | '/team/csw/$cswId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/admin' | '/map' | '/profile' | '/records' | '/settings' | '/team'
+  to:
+    | '/'
+    | '/admin'
+    | '/map'
+    | '/profile'
+    | '/records'
+    | '/settings'
+    | '/team'
+    | '/team/csw/$cswId'
   id:
     | '__root__'
     | '/'
@@ -103,6 +128,7 @@ export interface FileRouteTypes {
     | '/_authenticated/records'
     | '/_authenticated/settings'
     | '/_authenticated/team/'
+    | '/_authenticated/team/csw/$cswId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -168,6 +194,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTeamIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/team/csw/$cswId': {
+      id: '/_authenticated/team/csw/$cswId'
+      path: '/team/csw/$cswId'
+      fullPath: '/team/csw/$cswId'
+      preLoaderRoute: typeof AuthenticatedTeamCswCswIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
@@ -178,6 +211,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedRecordsRoute: typeof AuthenticatedRecordsRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedTeamIndexRoute: typeof AuthenticatedTeamIndexRoute
+  AuthenticatedTeamCswCswIdRoute: typeof AuthenticatedTeamCswCswIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -187,6 +221,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedRecordsRoute: AuthenticatedRecordsRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedTeamIndexRoute: AuthenticatedTeamIndexRoute,
+  AuthenticatedTeamCswCswIdRoute: AuthenticatedTeamCswCswIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
