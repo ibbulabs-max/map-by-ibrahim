@@ -152,6 +152,48 @@ export type Database = {
         }
         Relationships: []
       }
+      team_memberships: {
+        Row: {
+          created_at: string
+          csw_id: string
+          id: string
+          status: string
+          supervisor_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          csw_id: string
+          id?: string
+          status?: string
+          supervisor_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          csw_id?: string
+          id?: string
+          status?: string
+          supervisor_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_memberships_csw_id_fkey"
+            columns: ["csw_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_memberships_supervisor_id_fkey"
+            columns: ["supervisor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
@@ -184,7 +226,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "survey_user"
+      app_role: "admin" | "survey_user" | "super_admin" | "supervisor"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -312,7 +354,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "survey_user"],
+      app_role: ["admin", "survey_user", "super_admin", "supervisor"],
     },
   },
 } as const
