@@ -8,6 +8,7 @@ export type GeoPosition = {
 
 export function useGeolocation() {
   const [position, setPosition] = useState<GeoPosition | null>(null);
+  const [heading, setHeading] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const watchRef = useRef<number | null>(null);
@@ -25,6 +26,14 @@ export function useGeolocation() {
     const onSuccess = (pos: GeolocationPosition) => {
       if (cancelled) return;
       setError(null);
+      // Only trust a GPS-reported heading while actually moving.
+      if (
+        typeof pos.coords.heading === "number" &&
+        !Number.isNaN(pos.coords.heading) &&
+        (pos.coords.speed ?? 0) > 0.5
+      ) {
+        setHeading(pos.coords.heading);
+      }
       setPosition((prev) => {
         const next = {
           lat: pos.coords.latitude,
@@ -58,14 +67,14 @@ export function useGeolocation() {
 
     // Fast first fix, then a high-accuracy watch.
     navigator.geolocation.getCurrentPosition(onSuccess, onError, {
-      enableHighAccuracy: false,
+      enableHighAccuracy: true,
       maximumAge: 60000,
       timeout: 10000,
     });
 
     watchRef.current = navigator.geolocation.watchPosition(onSuccess, onError, {
       enableHighAccuracy: true,
-      maximumAge: 3000,
+      maximumAge: 2000,
       timeout: 25000,
     });
 
@@ -76,5 +85,27 @@ export function useGeolocation() {
     };
   }, [attempt]);
 
-  return { position, error, retry };
+  // Device compass heading — only used when the platform actually reports it.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onOrientation = (e: DeviceOrientationEvent) => {
+      const webkit = (e as DeviceOrientationEvent & { webkitCompassHeading?: number })
+        .webkitCompassHeading;
+      if (typeof webkit === "number" && !Number.isNaN(webkit)) {
+        setHeading(webkit);
+        return;
+      }
+      if (e.absolute && typeof e.alpha === "number" && !Number.isNaN(e.alpha)) {
+        setHeading((360 - e.alpha) % 360);
+      }
+    };
+    window.addEventListener("deviceorientationabsolute", onOrientation as EventListener);
+    window.addEventListener("deviceorientation", onOrientation as EventListener);
+    return () => {
+      window.removeEventListener("deviceorientationabsolute", onOrientation as EventListener);
+      window.removeEventListener("deviceorientation", onOrientation as EventListener);
+    };
+  }, []);
+
+  return { position, heading, error, retry };
 }
