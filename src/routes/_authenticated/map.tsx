@@ -119,8 +119,8 @@ function MapScreen() {
   const [move, setMove] = useState<{ pin: Pin; lat: number; lng: number } | null>(null);
 
   const canMove = useCallback(
-    (pin: Pin) => isAdmin || isSupervisor || pin.user_id === session?.user.id,
-    [isAdmin, isSupervisor, session],
+    (pin: Pin) => isAdmin || pin.user_id === session?.user.id,
+    [isAdmin, session],
   );
 
   // In Add Pin Mode a tap drops / moves the temporary marker.
@@ -493,7 +493,7 @@ function MapScreen() {
           setMove(null);
         }}
         className={`press glass absolute bottom-60 right-4 z-30 grid size-12 place-items-center rounded-2xl ${
-          editMode ? "text-primary-foreground [background:var(--primary-gradient,theme(colors.primary.DEFAULT))]" : "text-primary"
+          editMode ? "bg-primary-gradient text-primary-foreground" : "text-primary"
         }`}
         aria-label="Edit pin locations"
       >
