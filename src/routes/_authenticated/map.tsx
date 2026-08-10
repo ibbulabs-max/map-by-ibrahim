@@ -11,32 +11,37 @@ import {
   Pencil,
   Plus,
   RefreshCw,
+  Search,
   Users,
   X,
 } from "lucide-react";
-import { Suspense, lazy, useCallback, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { BottomNav } from "@/components/BottomNav";
 import { PinDetailsSheet } from "@/components/PinDetailsSheet";
 import { PinFormSheet } from "@/components/PinFormSheet";
+import { HouseDetailsSheet } from "@/components/houses/HouseDetailsSheet";
 import { Drawer, DrawerContent } from "@/components/ui/drawer";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeletePin, usePins, useSavePin, type PinDraft } from "@/hooks/usePins";
+import { useHouses, useSaveHouseLocation } from "@/hooks/useHouses";
+import { matchesHouseSearch, type House } from "@/lib/houses";
 import { supabase } from "@/integrations/supabase/client";
 import { PIN_TYPES, distanceMeters, pinTypeDef, pinTypeLabel, type Pin } from "@/lib/pin-types";
 import { teamPeople } from "@/lib/team.functions";
 
 const LeafletMap = lazy(() => import("@/components/map/LeafletMap"));
 
-type MapSearch = { user?: string; supervisor?: string };
+type MapSearch = { user?: string; supervisor?: string; house?: string };
 
 export const Route = createFileRoute("/_authenticated/map")({
   validateSearch: (search: Record<string, unknown>): MapSearch => {
     const out: MapSearch = {};
     if (typeof search["user"] === "string") out.user = search["user"];
     if (typeof search["supervisor"] === "string") out.supervisor = search["supervisor"];
+    if (typeof search["house"] === "string") out.house = search["house"];
     return out;
   },
   head: () => ({
@@ -118,6 +123,81 @@ function MapScreen() {
   const [editMode, setEditMode] = useState(false);
   const [move, setMove] = useState<{ pin: Pin; lat: number; lng: number } | null>(null);
 
+  // ---- houses: search, details, add / move location ----
+  const { data: houses = [] } = useHouses();
+  const saveHouseLocation = useSaveHouseLocation();
+  const [houseTerm, setHouseTerm] = useState("");
+  const [houseOpen, setHouseOpen] = useState(false);
+  const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
+  const [locating, setLocating] = useState<House | null>(null);
+
+  const houseMatches = useMemo(
+    () => (houseTerm.trim() ? houses.filter((h) => matchesHouseSearch(h, houseTerm)).slice(0, 20) : []),
+    [houses, houseTerm],
+  );
+
+  const openHouse = useCallback(
+    (house: House) => {
+      setHouseOpen(false);
+      setHouseTerm("");
+      if (house.latitude !== null && house.longitude !== null) {
+        setFocus({ lat: house.latitude, lng: house.longitude, id: house.id });
+        setSelectedHouse(house);
+      } else {
+        setSelectedHouse(house);
+      }
+    },
+    [],
+  );
+
+  const startHouseLocation = useCallback(
+    (house: House) => {
+      setSelectedHouse(null);
+      setEditMode(false);
+      setPlacing(false);
+      setLocating(house);
+      const start =
+        house.latitude !== null && house.longitude !== null
+          ? { lat: house.latitude, lng: house.longitude }
+          : position
+            ? { lat: position.lat, lng: position.lng }
+            : null;
+      setDraft(start);
+      if (start) setFocus({ lat: start.lat, lng: start.lng, id: house.id });
+      else toast.info("Tap the map to place this house");
+    },
+    [position],
+  );
+
+  // Deep link from the Houses screen: /map?house=<HOUSE ID>
+  useEffect(() => {
+    if (!search.house || !houses.length) return;
+    const house = houses.find((h) => h.house_id.toUpperCase() === search.house!.toUpperCase());
+    if (house) startHouseLocation(house);
+    void navigate({ to: "/map", search: {} });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search.house, houses]);
+
+  function confirmHouseLocation() {
+    if (!locating || !draft) return;
+    saveHouseLocation.mutate(
+      {
+        house: locating,
+        lat: draft.lat,
+        lng: draft.lng,
+        accuracy: position?.accuracy ?? null,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Location mapped");
+          setLocating(null);
+          setDraft(null);
+        },
+        onError: (e) => toast.error(e.message),
+      },
+    );
+  }
+
   const canMove = useCallback(
     (pin: Pin) => isAdmin || pin.user_id === session?.user.id,
     [isAdmin, session],
@@ -127,12 +207,16 @@ function MapScreen() {
   const handleTap = useCallback(
     (latlng: { lat: number; lng: number }) => {
       if (editMode) return;
+      if (locating) {
+        setDraft(latlng);
+        return;
+      }
       setEditing(null);
       setDraft(latlng);
       setPlacing(true);
       setFormOpen(true);
     },
-    [editMode],
+    [editMode, locating],
   );
 
   const handleSelect = useCallback((pin: Pin) => setSelected(pin), []);
@@ -274,6 +358,50 @@ function MapScreen() {
             <MapPin className="size-3.5" />
             {pins.length}
           </span>
+        </div>
+
+        <div className="glass pointer-events-auto mt-2 rounded-2xl px-3 py-2.5">
+          <div className="flex items-center gap-2">
+            <Search className="size-4 shrink-0 text-muted-foreground" />
+            <input
+              value={houseTerm}
+              onChange={(e) => {
+                setHouseTerm(e.target.value);
+                setHouseOpen(true);
+              }}
+              placeholder="Search House ID, house number or member"
+              className="w-full bg-transparent text-[13px] outline-none"
+            />
+          </div>
+          {houseOpen && houseMatches.length ? (
+            <div className="mt-2 max-h-52 space-y-1.5 overflow-y-auto pr-1">
+              {houseMatches.map((h) => (
+                <button
+                  key={h.id}
+                  type="button"
+                  onClick={() => openHouse(h)}
+                  className="press flex w-full items-center justify-between gap-2 rounded-xl bg-card/70 px-3 py-2 text-left"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-[12px] font-semibold">{h.house_id}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      House No. {h.house_number || "—"} · {h.house_members?.length ?? 0} members
+                    </span>
+                  </span>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      h.latitude === null ? "bg-amber-500/15 text-amber-600" : "bg-primary/10 text-primary"
+                    }`}
+                  >
+                    {h.latitude === null ? "Not mapped" : "Mapped"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {houseOpen && houseTerm.trim() && !houseMatches.length ? (
+            <p className="mt-2 text-[11px] text-muted-foreground">No matching house found.</p>
+          ) : null}
         </div>
 
         {isAdmin || isSupervisor ? (
@@ -437,6 +565,44 @@ function MapScreen() {
           </div>
         ) : null}
 
+        {locating ? (
+          <div className="glass pointer-events-auto mt-2 rounded-2xl px-4 py-3">
+            <p className="text-[13px] font-semibold">
+              {locating.latitude === null ? "Add location" : "Edit location"} · {locating.house_id}
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Old:{" "}
+              {locating.latitude === null
+                ? "Not mapped"
+                : `${locating.latitude.toFixed(6)}, ${locating.longitude!.toFixed(6)}`}
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              New: {draft ? `${draft.lat.toFixed(6)}, ${draft.lng.toFixed(6)}` : "Tap the map or drag the marker"}
+            </p>
+            <div className="mt-2.5 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setLocating(null);
+                  setDraft(null);
+                }}
+                className="press rounded-xl bg-card/70 py-2.5 text-[12px] font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!draft || saveHouseLocation.isPending}
+                onClick={confirmHouseLocation}
+                className="press flex items-center justify-center gap-1.5 rounded-xl bg-primary-gradient py-2.5 text-[12px] font-semibold text-primary-foreground disabled:opacity-60"
+              >
+                <Check className="size-3.5" />
+                Save Location
+              </button>
+            </div>
+          </div>
+        ) : null}
+
         {move ? (
           <div className="glass pointer-events-auto mt-2 rounded-2xl px-4 py-3">
             <p className="text-[13px] font-semibold">
@@ -574,6 +740,12 @@ function MapScreen() {
           </div>
         </DrawerContent>
       </Drawer>
+
+      <HouseDetailsSheet
+        house={selectedHouse}
+        onOpenChange={(open) => !open && setSelectedHouse(null)}
+        onAddLocation={startHouseLocation}
+      />
 
       <PinDetailsSheet
         pin={selected}
