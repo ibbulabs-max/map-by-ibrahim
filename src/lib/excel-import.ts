@@ -181,11 +181,15 @@ export type PreparedHouse = {
   status: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** Canonical pin type from the sheet — set even when the row has no coordinates. */
+  pin_type: string | null;
+  custom_type: string | null;
   data: Record<string, unknown>;
   members: PreparedMember[];
   rowCount: number;
   location: LocationInfo | null;
 };
+
 
 /** A map record that carries coordinates but no House ID (Empty Land, Shop, …). */
 export type PreparedPlace = {
@@ -293,8 +297,13 @@ export function prepareImport(rows: Record<string, unknown>[], columns: Detected
       if (hasAnyCoord) invalidCoords += 1;
     }
 
-    const { pin_type, custom_type } = normalizePinType(typeCol ? row[typeCol] : null);
+    // The PID/Pin Type is read whether or not the row carries coordinates, so a
+    // "House ID + PID Type" file still contributes the type to the same record.
+    const rawType = typeCol ? str(row[typeCol]) : null;
+    const { pin_type, custom_type } = normalizePinType(rawType);
+    const typed = rawType ? { pin_type, custom_type } : null;
     if (coordsOk) typeCounts[pin_type] = (typeCounts[pin_type] ?? 0) + 1;
+
 
     const location: LocationInfo | null = coordsOk
       ? {
@@ -346,6 +355,8 @@ export function prepareImport(rows: Record<string, unknown>[], columns: Detected
         status: statusCol ? str(row[statusCol]) : null,
         latitude: coordsOk ? (lat as number) : null,
         longitude: coordsOk ? (lng as number) : null,
+        pin_type: typed?.pin_type ?? null,
+        custom_type: typed?.custom_type ?? null,
         data: {},
         members: [],
         rowCount: 0,
@@ -364,18 +375,25 @@ export function prepareImport(rows: Record<string, unknown>[], columns: Detected
         house.longitude = lng as number;
       }
       if (!house.location && location) house.location = location;
+      // A more specific type from a later row wins over a plain "house".
+      if (typed && (house.pin_type === null || (house.pin_type === "house" && typed.pin_type !== "house"))) {
+        house.pin_type = typed.pin_type;
+        house.custom_type = typed.custom_type;
+      }
     }
     house.rowCount += 1;
+
+    if (typed && !house.data['type']) house.data['type'] = typed.custom_type ?? typed.pin_type;
 
     // House-level descriptive fields coming from the location columns.
     if (location) {
       if (location.owner_name && !house.data['owner_name']) house.data['owner_name'] = location.owner_name;
       if (location.notes && !house.data['notes']) house.data['notes'] = location.notes;
       if (location.surveyor && !house.data['surveyor']) house.data['surveyor'] = location.surveyor;
-      if (!house.data['type']) house.data['type'] = location.custom_type ?? location.pin_type;
       if (location.external_created_at && !house.data['captured_at'])
         house.data['captured_at'] = location.external_created_at;
     }
+
 
     // Row extras belong to the member on that row; only member-less rows
     // contribute house-level extras. This keeps survey values per member.

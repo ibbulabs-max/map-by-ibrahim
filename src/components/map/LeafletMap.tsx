@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import "leaflet/dist/leaflet.css";
 import { pinTypeDef, type Pin } from "@/lib/pin-types";
+import { RISK_META, type RiskLevel } from "@/lib/risk";
 import type { GeoPosition } from "@/hooks/useGeolocation";
 
 type Props = {
@@ -17,6 +18,8 @@ type Props = {
   addMode: boolean;
   /** when true, authorised pins become draggable */
   editMode: boolean;
+  /** health risk per House ID (uppercase) — drawn as a coloured ring on the pin */
+  riskByHouse?: Record<string, RiskLevel>;
   canMove: (pin: Pin) => boolean;
   onMapTap: (latlng: { lat: number; lng: number }) => void;
   onDraftMove: (latlng: { lat: number; lng: number }) => void;
@@ -25,31 +28,37 @@ type Props = {
   onPinDragged: (pin: Pin, latlng: { lat: number; lng: number }) => void;
 };
 
-function markerHtml(pin: Pin, dim: boolean) {
+function riskRing(level: RiskLevel | undefined) {
+  if (!level || level === "unknown") return "";
+  return `box-shadow:0 0 0 3px ${RISK_META[level].color}, 0 6px 16px -4px rgba(10,30,60,0.45);`;
+}
+
+function markerHtml(pin: Pin, dim: boolean, risk?: RiskLevel) {
   const def = pinTypeDef(pin.pin_type);
   const icon = renderToStaticMarkup(
     createElement(def.icon, { size: 15, color: "white", strokeWidth: 2.4 }),
   );
+  const ring = riskRing(risk) || "box-shadow:0 6px 16px -4px rgba(10,30,60,0.45);";
   return `<div style="
       width:34px;height:34px;border-radius:50% 50% 50% 6px;transform:rotate(-45deg);
       display:grid;place-items:center;background:${def.color};opacity:${dim ? 0.45 : 1};
-      border:2px solid rgba(255,255,255,0.92);
-      box-shadow:0 6px 16px -4px rgba(10,30,60,0.45);">
+      border:2px solid rgba(255,255,255,0.92);${ring}">
       <div style="transform:rotate(45deg);display:grid;place-items:center;">${icon}</div>
     </div>`;
 }
 
-function stackHtml(pins: Pin[]) {
+function stackHtml(pins: Pin[], risk?: RiskLevel) {
   const def = pinTypeDef(pins[0]!.pin_type);
+  const ring = riskRing(risk) || "box-shadow:0 6px 16px -4px rgba(10,30,60,0.45);";
   return `<div style="position:relative;width:38px;height:38px;">
       <div style="position:absolute;inset:0;border-radius:50% 50% 50% 6px;transform:rotate(-45deg);
-        background:${def.color};border:2px solid rgba(255,255,255,0.92);
-        box-shadow:0 6px 16px -4px rgba(10,30,60,0.45);"></div>
+        background:${def.color};border:2px solid rgba(255,255,255,0.92);${ring}"></div>
       <div style="position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;padding:0 5px;
         border-radius:999px;background:white;color:#0b2a4a;font-size:11px;font-weight:700;
         display:grid;place-items:center;box-shadow:0 4px 10px -3px rgba(10,30,60,0.5);">${pins.length}</div>
     </div>`;
 }
+
 
 function clusterHtml(count: number) {
   const size = count > 99 ? 48 : count > 9 ? 42 : 36;
@@ -70,7 +79,9 @@ export default function LeafletMap({
   focus,
   addMode,
   editMode,
+  riskByHouse,
   canMove,
+
   onMapTap,
   onDraftMove,
   onSelectPin,
@@ -95,6 +106,9 @@ export default function LeafletMap({
   const pinsRef = useRef(pins);
   const showRef = useRef(showPins);
   const editRef = useRef(editMode);
+  const riskRef = useRef(riskByHouse);
+  riskRef.current = riskByHouse;
+
   tapRef.current = onMapTap;
   selectRef.current = onSelectPin;
   selectManyRef.current = onSelectMany;
@@ -252,16 +266,20 @@ export default function LeafletMap({
         const stacked = cell === 0 && group.length > 1;
         if (group.length === 1 || stacked) {
           const pin = group[0]!;
+          const risk = riskRef.current?.[(pin.house_id ?? "").trim().toUpperCase()];
           const draggable = editRef.current && group.length === 1 && canMoveRef.current(pin);
           const marker = L.marker([pin.latitude, pin.longitude], {
             draggable,
             icon: L.divIcon({
-              html: stacked ? stackHtml(group) : markerHtml(pin, editRef.current && !draggable),
+              html: stacked
+                ? stackHtml(group, risk)
+                : markerHtml(pin, editRef.current && !draggable, risk),
               className: "",
               iconSize: [34, 34],
               iconAnchor: [17, 30],
             }),
           })
+
             .on("click", (e) => {
               L.DomEvent.stopPropagation(e as unknown as Event);
               if (stacked) selectManyRef.current(group);
@@ -309,7 +327,7 @@ export default function LeafletMap({
   // redraw when pin data / visibility / edit mode changes
   useEffect(() => {
     renderRef.current();
-  }, [pins, showPins, editMode]);
+  }, [pins, showPins, editMode, riskByHouse]);
 
   // ---- draft marker ----
   useEffect(() => {

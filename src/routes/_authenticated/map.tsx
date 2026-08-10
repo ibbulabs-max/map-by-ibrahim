@@ -28,6 +28,8 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDeletePin, usePins, useSavePin, type PinDraft } from "@/hooks/usePins";
 import { useHouses, useSaveHouseLocation } from "@/hooks/useHouses";
 import { matchesHouseSearch, type House } from "@/lib/houses";
+import { houseRisk, type RiskLevel } from "@/lib/risk";
+
 import { supabase } from "@/integrations/supabase/client";
 import { PIN_TYPES, distanceMeters, pinTypeDef, pinTypeLabel, type Pin } from "@/lib/pin-types";
 import { teamPeople } from "@/lib/team.functions";
@@ -135,6 +137,14 @@ function MapScreen() {
     () => (houseTerm.trim() ? houses.filter((h) => matchesHouseSearch(h, houseTerm)).slice(0, 20) : []),
     [houses, houseTerm],
   );
+
+  // Health risk per House ID, so map pins can carry the red/yellow/green ring.
+  const riskByHouse = useMemo(() => {
+    const out: Record<string, RiskLevel> = {};
+    for (const h of houses) out[h.house_id.trim().toUpperCase()] = houseRisk(h).level;
+    return out;
+  }, [houses]);
+
 
   const openHouse = useCallback(
     (house: House) => {
@@ -332,6 +342,8 @@ function MapScreen() {
             focus={focus}
             addMode={placing}
             editMode={editMode}
+            riskByHouse={riskByHouse}
+
             canMove={canMove}
             onMapTap={handleTap}
             onDraftMove={setDraft}
