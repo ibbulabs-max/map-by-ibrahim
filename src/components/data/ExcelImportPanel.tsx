@@ -31,6 +31,8 @@ type Person = { id: string; name: string; kind: "supervisor" | "csw" | "self" };
 export function ExcelImportPanel() {
   const { session, profile, role, isAdmin, isSupervisor, supervisorId } = useAuth();
   const { data: houses = [] } = useHouses();
+  const { data: pins = [] } = usePins();
+
   const apply = useApplyImport();
   const fetchPeople = useServerFn(teamPeople);
 
