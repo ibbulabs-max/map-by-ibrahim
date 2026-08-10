@@ -251,11 +251,13 @@ function MembersTab({
   editing,
   onSave,
   onRemove,
+  onOpenSurvey,
 }: {
   members: HouseMember[];
   editing: boolean;
   onSave: (member: HouseMember | undefined, patch: Partial<HouseMember>) => void;
   onRemove: (member: HouseMember) => void;
+  onOpenSurvey: (member: HouseMember) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [newId, setNewId] = useState("");
@@ -274,10 +276,12 @@ function MembersTab({
           key={member.id}
           member={member}
           editing={editing}
+          onOpenSurvey={() => onOpenSurvey(member)}
           onSave={(patch) => onSave(member, patch)}
           onRemove={() => onRemove(member)}
         />
       ))}
+
 
       {editing ? (
         adding ? (
