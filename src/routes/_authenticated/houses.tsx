@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Home, MapPinned, Search, Upload } from "lucide-react";
+import { Home, Search } from "lucide-react";
 
 import { BottomNav } from "@/components/BottomNav";
 import { EmptyState, GlassCard, ScreenShell } from "@/components/glass";
@@ -152,5 +152,3 @@ function HousesScreen() {
     </>
   );
 }
-
-export const Icons = { MapPinned, Upload };
