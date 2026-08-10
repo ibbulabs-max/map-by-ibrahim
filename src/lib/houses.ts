@@ -4,6 +4,10 @@ export type HouseMember = {
   member_id: string | null;
   member_name: string | null;
   data: Record<string, unknown>;
+  source_files?: string[];
+  uploaded_by?: string | null;
+  uploaded_at?: string | null;
+  possible_duplicate?: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -25,6 +29,9 @@ export type House = {
   pin_id: string | null;
   data: Record<string, unknown>;
   created_by: string | null;
+  uploaded_by?: string | null;
+  uploaded_at?: string | null;
+  source_files?: string[];
   created_at: string;
   updated_at: string;
   house_members?: HouseMember[];
