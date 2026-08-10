@@ -97,6 +97,7 @@ export type Database = {
           assigned_csw_id: string | null
           created_at: string
           created_by: string | null
+          custom_type: string | null
           data: Json
           house_id: string
           house_number: string | null
@@ -108,6 +109,7 @@ export type Database = {
           mapped_at: string | null
           mapped_by: string | null
           pin_id: string | null
+          pin_type: string
           source_files: Json
           status: string | null
           supervisor_id: string | null
@@ -120,6 +122,7 @@ export type Database = {
           assigned_csw_id?: string | null
           created_at?: string
           created_by?: string | null
+          custom_type?: string | null
           data?: Json
           house_id: string
           house_number?: string | null
@@ -131,6 +134,7 @@ export type Database = {
           mapped_at?: string | null
           mapped_by?: string | null
           pin_id?: string | null
+          pin_type?: string
           source_files?: Json
           status?: string | null
           supervisor_id?: string | null
@@ -143,6 +147,7 @@ export type Database = {
           assigned_csw_id?: string | null
           created_at?: string
           created_by?: string | null
+          custom_type?: string | null
           data?: Json
           house_id?: string
           house_number?: string | null
@@ -154,6 +159,7 @@ export type Database = {
           mapped_at?: string | null
           mapped_by?: string | null
           pin_id?: string | null
+          pin_type?: string
           source_files?: Json
           status?: string | null
           supervisor_id?: string | null

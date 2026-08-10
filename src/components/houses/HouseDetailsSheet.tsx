@@ -12,6 +12,9 @@ import {
   type House,
   type HouseMember,
 } from "@/lib/houses";
+import { pinTypeLabel } from "@/lib/pin-types";
+import { houseRisk, memberRisk, RISK_META } from "@/lib/risk";
+
 
 type Tab = "house" | "members" | "data";
 
@@ -178,12 +181,28 @@ function HouseTab({
   const [houseNumber, setHouseNumber] = useState(house.house_number ?? "");
   const [status, setStatus] = useState(house.status ?? "");
 
+  const risk = houseRisk(house);
+
   return (
     <div className="space-y-2.5">
+      <div className="flex items-center gap-2 rounded-2xl border border-border bg-card/70 px-3.5 py-2.5">
+        <span
+          className="size-3 shrink-0 rounded-full"
+          style={{ background: RISK_META[risk.level].color }}
+        />
+        <span className="text-[13px] font-semibold">{RISK_META[risk.level].label}</span>
+        {risk.reasons.length ? (
+          <span className="truncate text-[11px] text-muted-foreground">
+            {risk.reasons.slice(0, 2).map((r) => r.label).join(" · ")}
+          </span>
+        ) : null}
+      </div>
+
       <dl className="grid grid-cols-2 gap-2">
         <Row label="House ID (protected)" value={house.house_id} />
         <Row label="House number" value={house.house_number || "—"} />
         <Row label="Status" value={house.status || "—"} />
+        <Row label="Pin type" value={pinTypeLabel(house.pin_type ?? "house", house.custom_type ?? null)} />
         <Row label="Location" value={locationStatusLabel(house.location_status)} />
         <Row
           label="Latitude"
@@ -199,6 +218,7 @@ function HouseTab({
           value={house.mapped_at ? new Date(house.mapped_at).toLocaleString() : "—"}
         />
       </dl>
+
 
       {onAddLocation ? (
         <button
@@ -480,11 +500,15 @@ function DataTab({
       </label>
 
       {member ? (
-        <p className="rounded-2xl bg-primary/10 px-3.5 py-2 text-[11px] font-medium text-primary">
-          Showing survey answers recorded for {member.member_name || "this member"}
-          {member.member_id ? ` (${member.member_id})` : ""}.
-        </p>
+        <>
+          <p className="rounded-2xl bg-primary/10 px-3.5 py-2 text-[11px] font-medium text-primary">
+            Showing survey answers recorded for {member.member_name || "this member"}
+            {member.member_id ? ` (${member.member_id})` : ""}.
+          </p>
+          <MemberRiskCard data={member.data ?? {}} />
+        </>
       ) : null}
+
 
       {entries.length ? (
         <dl className="grid grid-cols-2 gap-2">
@@ -503,3 +527,28 @@ function DataTab({
   );
 }
 
+
+/** Risk read-out for the selected member, computed from their own readings. */
+function MemberRiskCard({ data }: { data: Record<string, unknown> }) {
+  const risk = memberRisk(data);
+  return (
+    <div className="rounded-2xl border border-border bg-card/70 px-3.5 py-2.5">
+      <div className="flex items-center gap-2">
+        <span
+          className="size-3 shrink-0 rounded-full"
+          style={{ background: RISK_META[risk.level].color }}
+        />
+        <span className="text-[13px] font-semibold">{RISK_META[risk.level].label}</span>
+      </div>
+      {risk.reasons.length ? (
+        <ul className="mt-1.5 space-y-0.5">
+          {risk.reasons.map((r) => (
+            <li key={r.label} className="text-[11px] text-muted-foreground">
+              • {r.label}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}

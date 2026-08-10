@@ -69,8 +69,9 @@ export function useApplyImport() {
       const { data: existingRows, error: exErr } = await supabase
         .from("houses")
         .select(
-          "id, house_id, house_number, status, data, latitude, longitude, accuracy, location_status, assigned_csw_id, supervisor_id, source_files",
+          "id, house_id, house_number, status, data, latitude, longitude, accuracy, location_status, assigned_csw_id, supervisor_id, source_files, pin_type, custom_type, pin_id",
         );
+
       if (exErr) throw exErr;
       const existing = new Map(
         (existingRows ?? []).map((h) => [String(h.house_id).toUpperCase(), h]),
@@ -95,7 +96,8 @@ export function useApplyImport() {
         houseUuid: string | null;
         houseNumber: string | null;
         location: LocationInfo;
-      }) {
+      }): Promise<string> {
+
         const { importKey, houseId, houseUuid, houseNumber, location } = params;
         const found =
           pinByKey.get(importKey) ??
@@ -127,8 +129,9 @@ export function useApplyImport() {
             .eq("id", found.id);
           if (error) throw error;
           pinsUpdated += 1;
-          return;
+          return found.id;
         }
+
 
         const { data, error } = await supabase
           .from("pins")
@@ -148,7 +151,9 @@ export function useApplyImport() {
         pinByKey.set(importKey, row);
         if (houseId) pinByHouse.set(houseId.trim().toUpperCase(), row);
         pinsAdded += 1;
+        return row.id;
       }
+
 
       let done = 0;
       const totalUnits = args.merged.houses.length + args.merged.places.length;
@@ -157,7 +162,15 @@ export function useApplyImport() {
         const owner = house.assignedTo ?? args.assignedTo;
         const found = existing.get(house.house_id.toUpperCase());
         const loc = house.location;
+        // Canonical pin type for the House record itself (works with or without coords).
+        const housePinType = house.pin_type ?? loc?.pin_type ?? null;
+        const houseCustomType = house.pin_type ? house.custom_type : (loc?.custom_type ?? null);
+        if (loc && housePinType) {
+          loc.pin_type = housePinType;
+          loc.custom_type = houseCustomType;
+        }
         let houseUuid: string;
+
 
         if (!found) {
           const { data, error } = await supabase
@@ -167,6 +180,9 @@ export function useApplyImport() {
               house_number: house.house_number,
               status: house.status,
               data: house.data,
+              pin_type: housePinType ?? "house",
+              custom_type: houseCustomType,
+
               latitude: loc?.latitude ?? null,
               longitude: loc?.longitude ?? null,
               accuracy: loc?.accuracy ?? null,
@@ -281,6 +297,13 @@ export function useApplyImport() {
           patch['uploaded_by'] = userId;
           patch['uploaded_at'] = now;
 
+          // A more specific imported type upgrades a plain/blank type on the record.
+          const currentType = (found as { pin_type?: string | null }).pin_type ?? null;
+          if (housePinType && (currentType === null || (currentType === "house" && housePinType !== "house"))) {
+            patch['pin_type'] = housePinType;
+            patch['custom_type'] = houseCustomType;
+          }
+
           const { error } = await supabase.from("houses").update(patch as never).eq("id", found.id);
           if (error) throw error;
           housesUpdated += 1;
@@ -289,14 +312,19 @@ export function useApplyImport() {
 
         // ---- map pin for this house (created or refreshed, never duplicated) ----
         if (loc) {
-          await syncPin({
+          const pinId = await syncPin({
             importKey: `house:${house.house_id.toUpperCase()}`,
             houseId: house.house_id,
             houseUuid,
             houseNumber: house.house_number,
             location: loc,
           });
+          // Keep the house linked to its single canonical pin.
+          if (pinId && (found as { pin_id?: string | null } | undefined)?.pin_id !== pinId) {
+            await supabase.from("houses").update({ pin_id: pinId } as never).eq("id", houseUuid);
+          }
         }
+
 
         // ---- members: match on Member ID, then House ID + name ----
         const { data: currentMembers } = await supabase

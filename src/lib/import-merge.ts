@@ -41,6 +41,9 @@ export type MergedHouse = {
   status: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** Canonical pin type for this House ID, merged across every uploaded file. */
+  pin_type: string | null;
+  custom_type: string | null;
   data: Record<string, unknown>;
   members: MergedMember[];
   sources: string[];
@@ -48,6 +51,7 @@ export type MergedHouse = {
   assignedTo: string | null;
   location: LocationInfo | null;
 };
+
 
 export type MergedPlace = PreparedPlace & { sources: string[]; assignedTo: string | null };
 
@@ -199,8 +203,21 @@ function foldHouse(
   target.house_number = pickValue(target.house_number, incoming.house_number, { ...base, field: "house_number" }, conflicts);
   target.status = pickValue(target.status, incoming.status, { ...base, field: "status" }, conflicts);
   if (incoming.location) foldLocation(target, incoming.location, fileName, conflicts);
+  // PID Type merges independently of coordinates so a type-only file still lands.
+  if (
+    incoming.pin_type &&
+    (target.pin_type === null || (target.pin_type === "house" && incoming.pin_type !== "house"))
+  ) {
+    target.pin_type = incoming.pin_type;
+    target.custom_type = incoming.custom_type;
+  }
+  if (target.location && target.pin_type && target.location.pin_type === "house" && target.pin_type !== "house") {
+    target.location.pin_type = target.pin_type;
+    target.location.custom_type = target.custom_type;
+  }
   target.latitude = target.location?.latitude ?? target.latitude;
   target.longitude = target.location?.longitude ?? target.longitude;
+
   target.data = mergeData(target.data, incoming.data, base, conflicts);
   target.rowCount += incoming.rowCount;
   if (!target.sources.includes(fileName)) target.sources.push(fileName);
@@ -276,6 +293,9 @@ export function mergeFiles(files: FileInput[]): MergeResult {
           status: house.status,
           latitude: house.latitude,
           longitude: house.longitude,
+          pin_type: house.pin_type,
+          custom_type: house.custom_type,
+
           data: { ...house.data },
           members: house.members.map((m) => ({
             key: memberKey(m),

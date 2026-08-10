@@ -27,6 +27,9 @@ export type House = {
   assigned_csw_id: string | null;
   supervisor_id: string | null;
   pin_id: string | null;
+  pin_type?: string | null;
+  custom_type?: string | null;
+
   data: Record<string, unknown>;
   created_by: string | null;
   uploaded_by?: string | null;
