@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useApplyImport } from "@/hooks/useImportData";
 import { useHouses } from "@/hooks/useHouses";
+import { usePins } from "@/hooks/usePins";
+
 import {
   APP_FIELDS,
   parseSpreadsheet,
@@ -31,6 +33,8 @@ type Person = { id: string; name: string; kind: "supervisor" | "csw" | "self" };
 export function ExcelImportPanel() {
   const { session, profile, role, isAdmin, isSupervisor, supervisorId } = useAuth();
   const { data: houses = [] } = useHouses();
+  const { data: pins = [] } = usePins();
+
   const apply = useApplyImport();
   const fetchPeople = useServerFn(teamPeople);
 
@@ -117,6 +121,12 @@ export function ExcelImportPanel() {
     [houses],
   );
 
+  const houseByKey = useMemo(
+    () => new Map(houses.map((h) => [h.house_id.toUpperCase(), h])),
+    [houses],
+  );
+
+
   const knownFields = useMemo(() => {
     const set = new Set<string>();
     for (const h of houses) {
@@ -126,10 +136,45 @@ export function ExcelImportPanel() {
     return set;
   }, [houses]);
 
+  const existingPinKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const p of pins) {
+      if (p.import_key) keys.add(p.import_key);
+      if (p.house_id) keys.add(`house:${p.house_id.trim().toUpperCase()}`);
+    }
+    return keys;
+  }, [pins]);
+
   const stats = useMemo(() => {
     if (!merged) return null;
     let existing = 0;
     for (const h of merged.houses) if (existingIds.has(h.house_id.toUpperCase())) existing += 1;
+
+    const housesWithCoords = merged.houses.filter((h) => h.location !== null);
+    let locationUpdates = 0;
+    let locationConflicts = 0;
+    let existingMapRecords = 0;
+    let newMapRecords = 0;
+
+    for (const h of housesWithCoords) {
+      const current = houseByKey.get(h.house_id.toUpperCase());
+      if (current && current.latitude !== null && current.longitude !== null) {
+        if (
+          Math.abs(current.latitude - h.location!.latitude) > 0.000015 ||
+          Math.abs(current.longitude - h.location!.longitude) > 0.000015
+        )
+          locationConflicts += 1;
+      } else {
+        locationUpdates += 1;
+      }
+      if (existingPinKeys.has(`house:${h.house_id.toUpperCase()}`)) existingMapRecords += 1;
+      else newMapRecords += 1;
+    }
+    for (const p of merged.places) {
+      if (existingPinKeys.has(`place:${p.key}`)) existingMapRecords += 1;
+      else newMapRecords += 1;
+    }
+
     return {
       files: files.length,
       rows: merged.totalRows,
@@ -141,11 +186,22 @@ export function ExcelImportPanel() {
       duplicates: merged.duplicateRows,
       conflicts: merged.conflicts.length,
       missingHouseId: merged.missingHouseId,
-      unmapped: merged.houses.filter((h) => h.latitude === null).length,
+      unmapped: merged.houses.filter((h) => h.location === null).length,
       newFields: merged.fields.filter((f) => !knownFields.has(f)),
       possibleDuplicateMembers: merged.possibleDuplicateMembers,
+      withCoords: merged.rowsWithCoords,
+      withoutCoords: merged.rowsWithoutCoords,
+      invalidCoords: merged.invalidCoords,
+      housesWithCoords: housesWithCoords.length,
+      genericPins: merged.places.length,
+      newMapRecords,
+      existingMapRecords,
+      locationUpdates,
+      locationConflicts,
+      typeCounts: merged.typeCounts,
     };
-  }, [merged, existingIds, files.length, knownFields]);
+  }, [merged, existingIds, files.length, knownFields, houseByKey, existingPinKeys]);
+
 
   const missingHouseId = files.filter((f) => !f.columns.some((c) => c.field === "house_id"));
   const ownerName = people.find((p) => p.id === owner)?.name ?? "—";
@@ -166,8 +222,9 @@ export function ExcelImportPanel() {
           setProgress(null);
           setFiles([]);
           toast.success(
-            `Imported — ${r.housesAdded} new houses, ${r.housesUpdated} updated, ${r.membersAdded} members added, ${r.conflicts} conflicts`,
+            `Imported — ${r.housesAdded} new houses, ${r.housesUpdated} updated, ${r.membersAdded} members added, ${r.pinsAdded} map pins added, ${r.locationsAdded} locations mapped, ${r.conflicts} conflicts`,
           );
+
         },
         onError: (e) => {
           setProgress(null);
@@ -359,6 +416,15 @@ export function ExcelImportPanel() {
               ["Missing house ID", stats.missingHouseId],
               ["Unmapped", stats.unmapped],
               ["New fields", stats.newFields.length],
+              ["With coordinates", stats.withCoords],
+              ["Without coordinates", stats.withoutCoords],
+              ["Invalid coordinates", stats.invalidCoords],
+              ["Houses with location", stats.housesWithCoords],
+              ["Generic map pins", stats.genericPins],
+              ["New map records", stats.newMapRecords],
+              ["Existing map records", stats.existingMapRecords],
+              ["Location updates", stats.locationUpdates],
+              ["Location conflicts", stats.locationConflicts],
             ].map(([label, value]) => (
               <div key={String(label)} className="rounded-xl bg-background/70 px-2 py-2">
                 <p className="text-[15px] font-semibold tabular-nums">{value}</p>
@@ -366,6 +432,28 @@ export function ExcelImportPanel() {
               </div>
             ))}
           </div>
+
+          {Object.keys(stats.typeCounts).length ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {Object.entries(stats.typeCounts).map(([type, count]) => (
+                <span
+                  key={type}
+                  className="rounded-full bg-background/70 px-2.5 py-1 text-[11px] font-medium"
+                >
+                  {fieldLabel(type)} · {count}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {stats.locationConflicts ? (
+            <p className="mt-2 rounded-2xl bg-amber-500/15 px-3 py-2 text-[11px] text-amber-700">
+              {stats.locationConflicts} location conflict
+              {stats.locationConflicts === 1 ? "" : "s"} — existing coordinates are kept and sent to
+              the Conflicts tab for review.
+            </p>
+          ) : null}
+
 
           {stats.newFields.length ? (
             <p className="mt-2 rounded-2xl bg-primary/10 px-3 py-2 text-[11px] text-primary">

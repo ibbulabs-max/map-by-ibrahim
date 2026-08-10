@@ -5,12 +5,20 @@
  * detection, then folded into ONE canonical house map keyed by House ID.
  * Non-empty values always win over blanks; two different non-empty values
  * never overwrite each other silently — they become a conflict for review.
+ * Map-only rows (no House ID) fold into a canonical set of places keyed by
+ * pin type + coordinates, so re-importing the same file never duplicates them.
  */
-import { prepareImport, type DetectedColumn, type PreparedHouse } from "@/lib/excel-import";
+import {
+  prepareImport,
+  type DetectedColumn,
+  type LocationInfo,
+  type PreparedHouse,
+  type PreparedPlace,
+} from "@/lib/excel-import";
 
 export type ConflictDraft = {
   house_id: string;
-  entity: "house" | "member" | "assignment";
+  entity: "house" | "member" | "assignment" | "location";
   member_ref: string | null;
   field: string;
   existing_value: string | null;
@@ -38,7 +46,10 @@ export type MergedHouse = {
   sources: string[];
   rowCount: number;
   assignedTo: string | null;
+  location: LocationInfo | null;
 };
+
+export type MergedPlace = PreparedPlace & { sources: string[]; assignedTo: string | null };
 
 export type FileInput = {
   name: string;
@@ -49,6 +60,7 @@ export type FileInput = {
 
 export type MergeResult = {
   houses: MergedHouse[];
+  places: MergedPlace[];
   totalRows: number;
   totalMembers: number;
   mergedRecords: number;
@@ -56,6 +68,10 @@ export type MergeResult = {
   missingHouseNumber: number;
   duplicateRows: number;
   possibleDuplicateMembers: number;
+  rowsWithCoords: number;
+  rowsWithoutCoords: number;
+  invalidCoords: number;
+  typeCounts: Record<string, number>;
   conflicts: ConflictDraft[];
   fields: string[];
 };
@@ -108,6 +124,49 @@ export function mergeData(
   return out;
 }
 
+export function sameCoords(a: LocationInfo, b: LocationInfo): boolean {
+  return (
+    Math.abs(a.latitude - b.latitude) < 0.000015 && Math.abs(a.longitude - b.longitude) < 0.000015
+  );
+}
+
+/** Folds a second location for the same house: fills blanks, flags real moves. */
+function foldLocation(
+  target: MergedHouse,
+  incoming: LocationInfo,
+  fileName: string,
+  conflicts: ConflictDraft[],
+) {
+  if (!target.location) {
+    target.location = { ...incoming };
+    target.latitude = incoming.latitude;
+    target.longitude = incoming.longitude;
+    return;
+  }
+  const current = target.location;
+  if (!sameCoords(current, incoming)) {
+    conflicts.push({
+      house_id: target.house_id,
+      entity: "location",
+      member_ref: null,
+      field: "location",
+      existing_value: `${current.latitude.toFixed(6)}, ${current.longitude.toFixed(6)}`,
+      new_value: `${incoming.latitude.toFixed(6)}, ${incoming.longitude.toFixed(6)}`,
+      source_file: fileName,
+    });
+    return;
+  }
+  current.accuracy = current.accuracy ?? incoming.accuracy;
+  current.notes = current.notes ?? incoming.notes;
+  current.owner_name = current.owner_name ?? incoming.owner_name;
+  current.surveyor = current.surveyor ?? incoming.surveyor;
+  current.external_created_at = current.external_created_at ?? incoming.external_created_at;
+  if (current.pin_type === "house" && incoming.pin_type !== "house") {
+    current.pin_type = incoming.pin_type;
+    current.custom_type = incoming.custom_type;
+  }
+}
+
 function normName(name: string | null): string {
   return (name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
@@ -139,8 +198,9 @@ function foldHouse(
   const base = { house_id: target.house_id, entity: "house" as const, member_ref: null, source_file: fileName };
   target.house_number = pickValue(target.house_number, incoming.house_number, { ...base, field: "house_number" }, conflicts);
   target.status = pickValue(target.status, incoming.status, { ...base, field: "status" }, conflicts);
-  target.latitude = pickValue(target.latitude, incoming.latitude, { ...base, field: "latitude" }, conflicts);
-  target.longitude = pickValue(target.longitude, incoming.longitude, { ...base, field: "longitude" }, conflicts);
+  if (incoming.location) foldLocation(target, incoming.location, fileName, conflicts);
+  target.latitude = target.location?.latitude ?? target.latitude;
+  target.longitude = target.location?.longitude ?? target.longitude;
   target.data = mergeData(target.data, incoming.data, base, conflicts);
   target.rowCount += incoming.rowCount;
   if (!target.sources.includes(fileName)) target.sources.push(fileName);
@@ -180,15 +240,20 @@ function foldHouse(
   }
 }
 
-/** Folds every uploaded file into ONE canonical set of houses. */
+/** Folds every uploaded file into ONE canonical set of houses + places. */
 export function mergeFiles(files: FileInput[]): MergeResult {
   const map = new Map<string, MergedHouse>();
+  const placeMap = new Map<string, MergedPlace>();
   const conflicts: ConflictDraft[] = [];
   const counters = { merged: 0, possibleDuplicates: 0 };
   let totalRows = 0;
   let missingHouseId = 0;
   let missingHouseNumber = 0;
   let duplicateRows = 0;
+  let rowsWithCoords = 0;
+  let rowsWithoutCoords = 0;
+  let invalidCoords = 0;
+  const typeCounts: Record<string, number> = {};
 
   for (const file of files) {
     const prepared = prepareImport(file.rows, file.columns);
@@ -196,6 +261,10 @@ export function mergeFiles(files: FileInput[]): MergeResult {
     missingHouseId += prepared.missingHouseId;
     missingHouseNumber += prepared.missingHouseNumber;
     duplicateRows += prepared.duplicateHouseIds;
+    rowsWithCoords += prepared.rowsWithCoords;
+    rowsWithoutCoords += prepared.rowsWithoutCoords;
+    invalidCoords += prepared.invalidCoords;
+    for (const [k, v] of Object.entries(prepared.typeCounts)) typeCounts[k] = (typeCounts[k] ?? 0) + v;
 
     for (const house of prepared.houses) {
       const key = house.house_id.toUpperCase();
@@ -219,10 +288,26 @@ export function mergeFiles(files: FileInput[]): MergeResult {
           sources: [file.name],
           rowCount: house.rowCount,
           assignedTo: file.assignedTo,
+          location: house.location ? { ...house.location } : null,
         });
         continue;
       }
       foldHouse(found, house, file.name, file.assignedTo, conflicts, counters);
+    }
+
+    for (const place of prepared.places) {
+      const found = placeMap.get(place.key);
+      if (!found) {
+        placeMap.set(place.key, { ...place, sources: [file.name], assignedTo: file.assignedTo });
+        continue;
+      }
+      found.data = { ...found.data, ...place.data };
+      found.location.accuracy = found.location.accuracy ?? place.location.accuracy;
+      found.location.notes = found.location.notes ?? place.location.notes;
+      found.location.owner_name = found.location.owner_name ?? place.location.owner_name;
+      found.location.surveyor = found.location.surveyor ?? place.location.surveyor;
+      if (!found.sources.includes(file.name)) found.sources.push(file.name);
+      counters.merged += 1;
     }
   }
 
@@ -235,6 +320,7 @@ export function mergeFiles(files: FileInput[]): MergeResult {
 
   return {
     houses,
+    places: [...placeMap.values()],
     totalRows,
     totalMembers: houses.reduce((s, h) => s + h.members.length, 0),
     mergedRecords: counters.merged,
@@ -242,6 +328,10 @@ export function mergeFiles(files: FileInput[]): MergeResult {
     missingHouseNumber,
     duplicateRows,
     possibleDuplicateMembers: counters.possibleDuplicates,
+    rowsWithCoords,
+    rowsWithoutCoords,
+    invalidCoords,
+    typeCounts,
     conflicts,
     fields: [...fields].sort(),
   };

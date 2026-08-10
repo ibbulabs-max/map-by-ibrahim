@@ -1,4 +1,5 @@
 /** Dynamic Excel/CSV parsing + mapping + preview analysis for the House importer. */
+import { normalizePinType } from "@/lib/pin-types";
 
 export type AppField =
   | "house_id"
@@ -8,6 +9,12 @@ export type AppField =
   | "status"
   | "latitude"
   | "longitude"
+  | "accuracy"
+  | "type"
+  | "owner_name"
+  | "notes"
+  | "surveyor"
+  | "created_at"
   | "ignore"
   | "extra";
 
@@ -19,6 +26,12 @@ export const APP_FIELDS: { value: AppField; label: string }[] = [
   { value: "status", label: "House Status" },
   { value: "latitude", label: "Latitude" },
   { value: "longitude", label: "Longitude" },
+  { value: "accuracy", label: "GPS Accuracy (m)" },
+  { value: "type", label: "Pin Type" },
+  { value: "owner_name", label: "Owner Name" },
+  { value: "notes", label: "Notes" },
+  { value: "surveyor", label: "Surveyor" },
+  { value: "created_at", label: "Captured At" },
   { value: "extra", label: "Keep as extra field" },
   { value: "ignore", label: "Ignore" },
 ];
@@ -72,8 +85,14 @@ const ALIASES: Record<Exclude<AppField, "ignore" | "extra">, string[]> = {
   member_id: ["memberid", "mid", "personid", "membercode", "individualid", "patientid"],
   member_name: ["membername", "personname", "name", "fullname", "individualname", "patientname"],
   status: ["status", "housestatus", "surveystatus"],
-  latitude: ["lat", "latitude", "ycoordinate", "ycoord"],
-  longitude: ["lon", "lng", "long", "longitude", "xcoordinate", "xcoord"],
+  latitude: ["lat", "latitude", "ycoordinate", "ycoord", "gpslat", "gpslatitude"],
+  longitude: ["lon", "lng", "long", "longitude", "xcoordinate", "xcoord", "gpslng", "gpslongitude"],
+  accuracy: ["accuracy", "accuracym", "gpsaccuracy", "accuracymeters", "acc", "accm"],
+  type: ["type", "pintype", "placetype", "recordtype", "category", "structuretype", "locationtype"],
+  owner_name: ["ownername", "owner", "headofhousehold", "hohname", "householdhead"],
+  notes: ["notes", "note", "remarks", "remark", "comment", "comments", "description"],
+  surveyor: ["surveyor", "surveyedby", "collectedby", "enumerator", "cswname", "fieldworker", "username"],
+  created_at: ["createdat", "created", "capturedat", "capturedon", "surveydatetime", "timestamp", "datetime", "recordedat"],
 };
 
 /** Detects the logical field for a raw spreadsheet column name. */
@@ -138,6 +157,18 @@ export async function parseSpreadsheet(file: File, sheetName?: string): Promise<
   return { sheetNames: wb.SheetNames, sheet, rows, columns };
 }
 
+export type LocationInfo = {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  pin_type: string;
+  custom_type: string | null;
+  owner_name: string | null;
+  notes: string | null;
+  surveyor: string | null;
+  external_created_at: string | null;
+};
+
 export type PreparedMember = {
   member_id: string | null;
   member_name: string | null;
@@ -153,15 +184,29 @@ export type PreparedHouse = {
   data: Record<string, unknown>;
   members: PreparedMember[];
   rowCount: number;
+  location: LocationInfo | null;
+};
+
+/** A map record that carries coordinates but no House ID (Empty Land, Shop, …). */
+export type PreparedPlace = {
+  key: string;
+  house_number: string | null;
+  location: LocationInfo;
+  data: Record<string, unknown>;
 };
 
 export type PreparedImport = {
   houses: PreparedHouse[];
+  places: PreparedPlace[];
   totalRows: number;
   missingHouseId: number;
   missingHouseNumber: number;
   duplicateHouseIds: number;
   totalMembers: number;
+  rowsWithCoords: number;
+  rowsWithoutCoords: number;
+  invalidCoords: number;
+  typeCounts: Record<string, number>;
   conflicts: string[];
 };
 
@@ -174,11 +219,37 @@ function str(value: unknown): string | null {
 function num(value: unknown): number | null {
   const s = str(value);
   if (s === null) return null;
-  const n = Number(s);
+  const n = Number(s.replace(/[^0-9.+-]/g, ""));
   return Number.isFinite(n) ? n : null;
 }
 
-/** Collapses rows into ONE house per House ID with many members. */
+export function validLatitude(value: number | null): value is number {
+  return value !== null && Number.isFinite(value) && Math.abs(value) <= 90;
+}
+
+export function validLongitude(value: number | null): value is number {
+  return value !== null && Number.isFinite(value) && Math.abs(value) <= 180;
+}
+
+/** Both coordinates present, in range, and not the null island. */
+export function validCoords(lat: number | null, lng: number | null): boolean {
+  if (!validLatitude(lat) || !validLongitude(lng)) return false;
+  return !(lat === 0 && lng === 0);
+}
+
+function toIso(value: unknown): string | null {
+  const s = str(value);
+  if (!s) return null;
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/** Deterministic identity for a map record without a House ID. */
+export function placeKey(type: string, lat: number, lng: number): string {
+  return `${type}@${lat.toFixed(6)},${lng.toFixed(6)}`;
+}
+
+/** Collapses rows into ONE house per House ID with many members, plus map-only places. */
 export function prepareImport(rows: Record<string, unknown>[], columns: DetectedColumn[]): PreparedImport {
   const by = (field: AppField) => columns.filter((c) => c.field === field).map((c) => c.name);
   const houseIdCol = by("house_id")[0];
@@ -188,24 +259,56 @@ export function prepareImport(rows: Record<string, unknown>[], columns: Detected
   const statusCol = by("status")[0];
   const latCol = by("latitude")[0];
   const lngCol = by("longitude")[0];
+  const accCol = by("accuracy")[0];
+  const typeCol = by("type")[0];
+  const ownerCol = by("owner_name")[0];
+  const notesCol = by("notes")[0];
+  const surveyorCol = by("surveyor")[0];
+  const createdCol = by("created_at")[0];
   const extraCols = by("extra");
 
   const map = new Map<string, PreparedHouse>();
+  const places = new Map<string, PreparedPlace>();
   let missingHouseId = 0;
   let missingHouseNumber = 0;
   let duplicateHouseIds = 0;
   let totalMembers = 0;
+  let rowsWithCoords = 0;
+  let rowsWithoutCoords = 0;
+  let invalidCoords = 0;
+  const typeCounts: Record<string, number> = {};
   const conflicts: string[] = [];
 
   for (const row of rows) {
     const houseId = houseIdCol ? str(row[houseIdCol]) : null;
-    if (!houseId) {
-      missingHouseId += 1;
-      continue;
-    }
-    const key = houseId.toUpperCase();
     const houseNumber = houseNumberCol ? str(row[houseNumberCol]) : null;
-    if (!houseNumber) missingHouseNumber += 1;
+
+    const lat = latCol ? num(row[latCol]) : null;
+    const lng = lngCol ? num(row[lngCol]) : null;
+    const hasAnyCoord = lat !== null || lng !== null;
+    const coordsOk = validCoords(lat, lng);
+    if (coordsOk) rowsWithCoords += 1;
+    else {
+      rowsWithoutCoords += 1;
+      if (hasAnyCoord) invalidCoords += 1;
+    }
+
+    const { pin_type, custom_type } = normalizePinType(typeCol ? row[typeCol] : null);
+    if (coordsOk) typeCounts[pin_type] = (typeCounts[pin_type] ?? 0) + 1;
+
+    const location: LocationInfo | null = coordsOk
+      ? {
+          latitude: lat as number,
+          longitude: lng as number,
+          accuracy: accCol ? num(row[accCol]) : null,
+          pin_type,
+          custom_type,
+          owner_name: ownerCol ? str(row[ownerCol]) : null,
+          notes: notesCol ? str(row[notesCol]) : null,
+          surveyor: surveyorCol ? str(row[surveyorCol]) : null,
+          external_created_at: createdCol ? toIso(row[createdCol]) : null,
+        }
+      : null;
 
     const extra: Record<string, unknown> = {};
     for (const col of extraCols) {
@@ -213,17 +316,40 @@ export function prepareImport(rows: Record<string, unknown>[], columns: Detected
       if (v !== null) extra[canonicalExtraKey(col)] = v;
     }
 
+    const memberId = memberIdCol ? str(row[memberIdCol]) : null;
+    const memberName = memberNameCol ? str(row[memberNameCol]) : null;
+    const rowHasMember = Boolean(memberId || memberName);
+
+    // ---- rows without a House ID are still valid map records ----
+    if (!houseId) {
+      missingHouseId += 1;
+      if (location) {
+        const key = placeKey(location.pin_type, location.latitude, location.longitude);
+        const existing = places.get(key);
+        if (existing) {
+          existing.data = { ...existing.data, ...extra };
+        } else {
+          places.set(key, { key, house_number: houseNumber, location, data: extra });
+        }
+      }
+      continue;
+    }
+
+    const key = houseId.toUpperCase();
+    if (!houseNumber) missingHouseNumber += 1;
+
     let house = map.get(key);
     if (!house) {
       house = {
         house_id: houseId,
         house_number: houseNumber,
         status: statusCol ? str(row[statusCol]) : null,
-        latitude: latCol ? num(row[latCol]) : null,
-        longitude: lngCol ? num(row[lngCol]) : null,
-        data: extra,
+        latitude: coordsOk ? (lat as number) : null,
+        longitude: coordsOk ? (lng as number) : null,
+        data: {},
         members: [],
         rowCount: 0,
+        location,
       };
       map.set(key, house);
     } else {
@@ -232,31 +358,57 @@ export function prepareImport(rows: Record<string, unknown>[], columns: Detected
         conflicts.push(`${houseId}: house number "${house.house_number}" vs "${houseNumber}"`);
       }
       if (!house.house_number && houseNumber) house.house_number = houseNumber;
+      if (!house.status && statusCol) house.status = str(row[statusCol]);
+      if (house.latitude === null && coordsOk) {
+        house.latitude = lat as number;
+        house.longitude = lng as number;
+      }
+      if (!house.location && location) house.location = location;
     }
     house.rowCount += 1;
 
-    const memberId = memberIdCol ? str(row[memberIdCol]) : null;
-    const memberName = memberNameCol ? str(row[memberNameCol]) : null;
-    if (memberId || memberName) {
-      const exists = house.members.some(
+    // House-level descriptive fields coming from the location columns.
+    if (location) {
+      if (location.owner_name && !house.data['owner_name']) house.data['owner_name'] = location.owner_name;
+      if (location.notes && !house.data['notes']) house.data['notes'] = location.notes;
+      if (location.surveyor && !house.data['surveyor']) house.data['surveyor'] = location.surveyor;
+      if (!house.data['type']) house.data['type'] = location.custom_type ?? location.pin_type;
+      if (location.external_created_at && !house.data['captured_at'])
+        house.data['captured_at'] = location.external_created_at;
+    }
+
+    // Row extras belong to the member on that row; only member-less rows
+    // contribute house-level extras. This keeps survey values per member.
+    if (rowHasMember) {
+      const exists = house.members.find(
         (m) =>
           (memberId && m.member_id && m.member_id.toUpperCase() === memberId.toUpperCase()) ||
-          (!memberId && m.member_name === memberName),
+          (!memberId && !m.member_id && m.member_name === memberName),
       );
-      if (!exists) {
+      if (exists) {
+        exists.data = { ...exists.data, ...extra };
+        if (!exists.member_name && memberName) exists.member_name = memberName;
+      } else {
         house.members.push({ member_id: memberId, member_name: memberName, data: extra });
         totalMembers += 1;
       }
+    } else {
+      house.data = { ...house.data, ...extra };
     }
   }
 
   return {
     houses: [...map.values()],
+    places: [...places.values()],
     totalRows: rows.length,
     missingHouseId,
     missingHouseNumber,
     duplicateHouseIds,
     totalMembers,
+    rowsWithCoords,
+    rowsWithoutCoords,
+    invalidCoords,
+    typeCounts,
     conflicts: conflicts.slice(0, 50),
   };
 }

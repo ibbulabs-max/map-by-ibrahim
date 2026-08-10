@@ -354,14 +354,19 @@ export type Database = {
           custom_type: string | null
           device_id: string | null
           device_time: string | null
+          external_created_at: string | null
           house_id: string | null
           house_number: string | null
+          house_uuid: string | null
           id: string
+          import_key: string | null
           latitude: number
           longitude: number
           notes: string | null
           owner_name: string | null
           pin_type: string
+          source: string
+          surveyor: string | null
           updated_at: string
           user_id: string
           username: string
@@ -372,14 +377,19 @@ export type Database = {
           custom_type?: string | null
           device_id?: string | null
           device_time?: string | null
+          external_created_at?: string | null
           house_id?: string | null
           house_number?: string | null
+          house_uuid?: string | null
           id?: string
+          import_key?: string | null
           latitude: number
           longitude: number
           notes?: string | null
           owner_name?: string | null
           pin_type: string
+          source?: string
+          surveyor?: string | null
           updated_at?: string
           user_id: string
           username: string
@@ -390,19 +400,32 @@ export type Database = {
           custom_type?: string | null
           device_id?: string | null
           device_time?: string | null
+          external_created_at?: string | null
           house_id?: string | null
           house_number?: string | null
+          house_uuid?: string | null
           id?: string
+          import_key?: string | null
           latitude?: number
           longitude?: number
           notes?: string | null
           owner_name?: string | null
           pin_type?: string
+          source?: string
+          surveyor?: string | null
           updated_at?: string
           user_id?: string
           username?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pins_house_uuid_fkey"
+            columns: ["house_uuid"]
+            isOneToOne: false
+            referencedRelation: "houses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
