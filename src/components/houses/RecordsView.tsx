@@ -1,10 +1,9 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { ArrowUpDown, Filter, Inbox, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { BottomNav } from "@/components/BottomNav";
-import { EmptyState, GlassCard, ScreenShell } from "@/components/glass";
+import { EmptyState, GlassCard } from "@/components/glass";
 import { PinDetailsSheet } from "@/components/PinDetailsSheet";
 import { PinFormSheet } from "@/components/PinFormSheet";
 import { useAuth } from "@/hooks/useAuth";
@@ -13,21 +12,9 @@ import { useDeletePin, usePins, useSavePin, type PinDraft } from "@/hooks/usePin
 import { PIN_TYPES, distanceMeters, formatDistance, pinTypeDef, pinTypeLabel, type Pin } from "@/lib/pin-types";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/_authenticated/records")({
-  head: () => ({
-    meta: [
-      { title: "Records — Smart Survey Map" },
-      { name: "description", content: "Search, filter and manage every survey record you captured." },
-      { property: "og:title", content: "Records — Smart Survey Map" },
-      { property: "og:description", content: "Search, filter and manage every survey record." },
-    ],
-  }),
-  component: RecordsScreen,
-});
-
 type SortKey = "newest" | "oldest" | "distance" | "house";
 
-function RecordsScreen() {
+export function RecordsView() {
   const navigate = useNavigate();
   const { session, profile } = useAuth();
   const { position } = useGeolocation();
@@ -67,7 +54,7 @@ function RecordsScreen() {
 
   return (
     <>
-      <ScreenShell title="Records" subtitle={`${rows.length} of ${pins.length} records`}>
+      <div>
         <div className="glass flex items-center gap-2 rounded-2xl px-4 py-3">
           <Search className="size-4 shrink-0 text-muted-foreground" />
           <input
@@ -156,7 +143,7 @@ function RecordsScreen() {
             })
           )}
         </div>
-      </ScreenShell>
+      </div>
 
       <PinDetailsSheet
         pin={selected}
@@ -204,7 +191,6 @@ function RecordsScreen() {
         }}
       />
 
-      <BottomNav />
     </>
   );
 }
