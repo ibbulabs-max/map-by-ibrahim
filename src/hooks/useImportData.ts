@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useHouseAudit } from "@/hooks/useHouses";
 import { supabase } from "@/integrations/supabase/client";
-import { isBlank, mergeData, pickValue, type ConflictDraft, type MergeResult } from "@/lib/import-merge";
+import { isBlank, mergeData, pickValue, sameCoords, type ConflictDraft, type MergeResult } from "@/lib/import-merge";
+import type { LocationInfo } from "@/lib/excel-import";
 import type { ImportBatch, ImportConflict } from "@/lib/imports";
 
 export type ApplyImportArgs = {
@@ -22,9 +23,24 @@ export type ApplyImportResult = {
   membersAdded: number;
   membersMerged: number;
   conflicts: number;
+  locationsAdded: number;
+  locationsConflicted: number;
+  pinsAdded: number;
+  pinsUpdated: number;
 };
 
 type PendingConflict = ConflictDraft & { house_uuid: string | null };
+
+type PinRow = {
+  id: string;
+  house_id: string | null;
+  import_key: string | null;
+  latitude: number;
+  longitude: number;
+  pin_type: string;
+};
+
+const near = (a: number, b: number) => Math.abs(a - b) < 0.000015;
 
 /** Writes a merged multi-file import into the ONE canonical house dataset. */
 export function useApplyImport() {
@@ -36,31 +52,114 @@ export function useApplyImport() {
     mutationFn: async (args: ApplyImportArgs): Promise<ApplyImportResult> => {
       const userId = session?.user.id ?? null;
       if (!userId) throw new Error("You must be signed in to import data");
+      const username = profile?.username ?? "import";
       const now = new Date().toISOString();
       const conflicts: PendingConflict[] = [];
       let housesAdded = 0;
       let housesUpdated = 0;
       let membersAdded = 0;
       let membersMerged = 0;
+      let locationsAdded = 0;
+      let locationsConflicted = 0;
+      let pinsAdded = 0;
+      let pinsUpdated = 0;
+
+      const locationAudit: Record<string, unknown>[] = [];
 
       const { data: existingRows, error: exErr } = await supabase
         .from("houses")
         .select(
-          "id, house_id, house_number, status, data, latitude, longitude, location_status, assigned_csw_id, supervisor_id, source_files",
+          "id, house_id, house_number, status, data, latitude, longitude, accuracy, location_status, assigned_csw_id, supervisor_id, source_files",
         );
       if (exErr) throw exErr;
       const existing = new Map(
         (existingRows ?? []).map((h) => [String(h.house_id).toUpperCase(), h]),
       );
 
+      // Every pin the current user can see — used so imports never duplicate pins.
+      const { data: pinRows } = await supabase
+        .from("pins")
+        .select("id, house_id, import_key, latitude, longitude, pin_type");
+      const pins = (pinRows ?? []) as unknown as PinRow[];
+      const pinByKey = new Map(pins.filter((p) => p.import_key).map((p) => [p.import_key!, p]));
+      const pinByHouse = new Map<string, PinRow>();
+      for (const p of pins) {
+        const key = (p.house_id ?? "").trim().toUpperCase();
+        if (key && !pinByHouse.has(key)) pinByHouse.set(key, p);
+      }
+
+      /** Creates or refreshes the map pin for a record without duplicating it. */
+      async function syncPin(params: {
+        importKey: string;
+        houseId: string | null;
+        houseUuid: string | null;
+        houseNumber: string | null;
+        location: LocationInfo;
+      }) {
+        const { importKey, houseId, houseUuid, houseNumber, location } = params;
+        const found =
+          pinByKey.get(importKey) ??
+          (houseId ? pinByHouse.get(houseId.trim().toUpperCase()) : undefined);
+
+        const descriptive = {
+          pin_type: location.pin_type,
+          custom_type: location.custom_type,
+          house_id: houseId,
+          house_number: houseNumber,
+          owner_name: location.owner_name,
+          notes: location.notes,
+          surveyor: location.surveyor,
+          source: "import",
+          import_key: importKey,
+          ...(houseUuid ? { house_uuid: houseUuid } : {}),
+          ...(location.external_created_at ? { external_created_at: location.external_created_at } : {}),
+        };
+
+        if (found) {
+          const samePlace = near(found.latitude, location.latitude) && near(found.longitude, location.longitude);
+          const { error } = await supabase
+            .from("pins")
+            .update({
+              ...descriptive,
+              // An existing pin is never silently moved — its location wins.
+              ...(samePlace ? { accuracy: location.accuracy } : {}),
+            } as never)
+            .eq("id", found.id);
+          if (error) throw error;
+          pinsUpdated += 1;
+          return;
+        }
+
+        const { data, error } = await supabase
+          .from("pins")
+          .insert({
+            ...descriptive,
+            user_id: userId,
+            username,
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracy: location.accuracy,
+            device_time: location.external_created_at ?? now,
+          } as never)
+          .select("id, house_id, import_key, latitude, longitude, pin_type")
+          .single();
+        if (error) throw error;
+        const row = data as unknown as PinRow;
+        pinByKey.set(importKey, row);
+        if (houseId) pinByHouse.set(houseId.trim().toUpperCase(), row);
+        pinsAdded += 1;
+      }
+
       let done = 0;
+      const totalUnits = args.merged.houses.length + args.merged.places.length;
+
       for (const house of args.merged.houses) {
         const owner = house.assignedTo ?? args.assignedTo;
         const found = existing.get(house.house_id.toUpperCase());
+        const loc = house.location;
         let houseUuid: string;
 
         if (!found) {
-          const mapped = house.latitude !== null && house.longitude !== null;
           const { data, error } = await supabase
             .from("houses")
             .insert({
@@ -68,10 +167,13 @@ export function useApplyImport() {
               house_number: house.house_number,
               status: house.status,
               data: house.data,
-              latitude: house.latitude,
-              longitude: house.longitude,
-              location_status: mapped ? "mapped" : "not_mapped",
-              location_source: mapped ? "import" : null,
+              latitude: loc?.latitude ?? null,
+              longitude: loc?.longitude ?? null,
+              accuracy: loc?.accuracy ?? null,
+              location_status: loc ? "mapped" : "not_mapped",
+              location_source: loc ? "import" : null,
+              mapped_by: loc ? userId : null,
+              mapped_at: loc ? now : null,
               assigned_csw_id: owner,
               supervisor_id: args.supervisorId,
               created_by: userId,
@@ -84,6 +186,15 @@ export function useApplyImport() {
           if (error) throw error;
           houseUuid = data.id;
           housesAdded += 1;
+          if (loc) {
+            locationsAdded += 1;
+            locationAudit.push({
+              action: "location_imported",
+              house_id: house.house_id,
+              old_value: null,
+              new_value: { latitude: loc.latitude, longitude: loc.longitude, type: loc.pin_type },
+            });
+          }
         } else {
           houseUuid = found.id;
           const local: ConflictDraft[] = [];
@@ -96,22 +207,50 @@ export function useApplyImport() {
           const status = pickValue(found.status, house.status, { ...base, field: "status" }, local);
           if (status !== found.status) patch['status'] = status;
 
-          if (found.latitude === null && house.latitude !== null && house.longitude !== null) {
-            patch['latitude'] = house.latitude;
-            patch['longitude'] = house.longitude;
-            patch['location_status'] = "mapped";
-            patch['location_source'] = "import";
-          } else if (
-            found.latitude !== null &&
-            house.latitude !== null &&
-            Math.abs(found.latitude - house.latitude) > 0.00001
-          ) {
-            local.push({
-              ...base,
-              field: "latitude",
-              existing_value: String(found.latitude),
-              new_value: String(house.latitude),
-            });
+          // ---- location: fill when missing, never silently overwrite ----
+          if (loc) {
+            const hasExisting = found.latitude !== null && found.longitude !== null;
+            if (!hasExisting) {
+              patch['latitude'] = loc.latitude;
+              patch['longitude'] = loc.longitude;
+              patch['accuracy'] = loc.accuracy;
+              patch['location_status'] = "mapped";
+              patch['location_source'] = "import";
+              patch['mapped_by'] = userId;
+              patch['mapped_at'] = now;
+              locationsAdded += 1;
+              locationAudit.push({
+                action: "location_imported",
+                house_id: house.house_id,
+                old_value: null,
+                new_value: { latitude: loc.latitude, longitude: loc.longitude, type: loc.pin_type },
+              });
+            } else if (
+              !sameCoords(
+                { ...loc, latitude: found.latitude!, longitude: found.longitude! },
+                loc,
+              )
+            ) {
+              locationsConflicted += 1;
+              local.push({
+                ...base,
+                entity: "location",
+                field: "location",
+                existing_value: `${found.latitude!.toFixed(6)}, ${found.longitude!.toFixed(6)}`,
+                new_value: `${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}`,
+              });
+              locationAudit.push({
+                action: "location_conflict",
+                house_id: house.house_id,
+                old_value: { latitude: found.latitude, longitude: found.longitude },
+                new_value: { latitude: loc.latitude, longitude: loc.longitude },
+              });
+            } else if (found.accuracy === null && loc.accuracy !== null) {
+              patch['accuracy'] = loc.accuracy;
+            }
+            if (found.location_status !== "mapped" && (patch['latitude'] || found.latitude !== null)) {
+              patch['location_status'] = "mapped";
+            }
           }
 
           const mergedData = mergeData(
@@ -146,6 +285,17 @@ export function useApplyImport() {
           if (error) throw error;
           housesUpdated += 1;
           for (const c of local) conflicts.push({ ...c, house_uuid: found.id });
+        }
+
+        // ---- map pin for this house (created or refreshed, never duplicated) ----
+        if (loc) {
+          await syncPin({
+            importKey: `house:${house.house_id.toUpperCase()}`,
+            houseId: house.house_id,
+            houseUuid,
+            houseNumber: house.house_number,
+            location: loc,
+          });
         }
 
         // ---- members: match on Member ID, then House ID + name ----
@@ -207,10 +357,23 @@ export function useApplyImport() {
         }
 
         done += 1;
-        args.onProgress?.(done, args.merged.houses.length);
+        args.onProgress?.(done, totalUnits);
       }
 
-      const unmapped = args.merged.houses.filter((h) => h.latitude === null).length;
+      // ---- map-only records (no House ID) ----
+      for (const place of args.merged.places) {
+        await syncPin({
+          importKey: `place:${place.key}`,
+          houseId: null,
+          houseUuid: null,
+          houseNumber: place.house_number,
+          location: place.location,
+        });
+        done += 1;
+        args.onProgress?.(done, totalUnits);
+      }
+
+      const unmapped = args.merged.houses.filter((h) => h.location === null).length;
       const { data: batch, error: batchErr } = await supabase
         .from("import_batches")
         .insert({
@@ -256,7 +419,30 @@ export function useApplyImport() {
         members_added: membersAdded,
         members_merged: membersMerged,
         conflicts: conflicts.length,
+        locations_added: locationsAdded,
+        location_conflicts: locationsConflicted,
+        pins_added: pinsAdded,
+        pins_updated: pinsUpdated,
       });
+
+      if (locationAudit.length) {
+        await audit("location_imported", {
+          batch_id: batch.id,
+          files: args.fileNames,
+          locations_added: locationsAdded,
+          location_conflicts: locationsConflicted,
+          records: locationAudit.slice(0, 200),
+        });
+      }
+      if (Object.keys(args.merged.typeCounts).length) {
+        await audit("pin_type_imported", {
+          batch_id: batch.id,
+          files: args.fileNames,
+          types: args.merged.typeCounts,
+          pins_added: pinsAdded,
+          pins_updated: pinsUpdated,
+        });
+      }
 
       return {
         batchId: batch.id,
@@ -265,10 +451,17 @@ export function useApplyImport() {
         membersAdded,
         membersMerged,
         conflicts: conflicts.length,
+        locationsAdded,
+        locationsConflicted,
+        pinsAdded,
+        pinsUpdated,
       };
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["houses"] });
+      void qc.invalidateQueries({ queryKey: ["pins"] });
+      void qc.invalidateQueries({ queryKey: ["team"] });
+      void qc.invalidateQueries({ queryKey: ["admin"] });
       void qc.invalidateQueries({ queryKey: ["import-batches"] });
       void qc.invalidateQueries({ queryKey: ["import-conflicts"] });
     },
@@ -316,7 +509,35 @@ export function useResolveConflict() {
   return useMutation({
     mutationFn: async ({ conflict, resolution }: { conflict: ImportConflict; resolution: Resolution }) => {
       if (resolution === "used_new" && conflict.house_uuid) {
-        if (conflict.entity === "house") {
+        if (conflict.entity === "location") {
+          const [latRaw, lngRaw] = (conflict.new_value ?? "").split(",");
+          const lat = Number((latRaw ?? "").trim());
+          const lng = Number((lngRaw ?? "").trim());
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            const { error } = await supabase
+              .from("houses")
+              .update({
+                latitude: lat,
+                longitude: lng,
+                location_status: "mapped",
+                location_source: "import",
+                mapped_by: session?.user.id ?? null,
+                mapped_at: new Date().toISOString(),
+              } as never)
+              .eq("id", conflict.house_uuid);
+            if (error) throw error;
+            await supabase
+              .from("pins")
+              .update({ latitude: lat, longitude: lng } as never)
+              .eq("import_key", `house:${conflict.house_id.toUpperCase()}`);
+            await audit("location_updated", {
+              house_uuid: conflict.house_uuid,
+              house_id: conflict.house_id,
+              old_value: conflict.existing_value,
+              new_value: conflict.new_value,
+            });
+          }
+        } else if (conflict.entity === "house") {
           const patch: Record<string, unknown> = {};
           if (["house_number", "status"].includes(conflict.field)) {
             patch[conflict.field] = conflict.new_value;
@@ -384,6 +605,7 @@ export function useResolveConflict() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["import-conflicts"] });
       void qc.invalidateQueries({ queryKey: ["houses"] });
+      void qc.invalidateQueries({ queryKey: ["pins"] });
     },
   });
 }
