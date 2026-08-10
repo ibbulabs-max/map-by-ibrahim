@@ -141,7 +141,7 @@ function MapScreen() {
       setHouseOpen(false);
       setHouseTerm("");
       if (house.latitude !== null && house.longitude !== null) {
-        setFocus({ lat: house.latitude, lng: house.longitude, id: house.id });
+        setFocus({ lat: house.latitude, lng: house.longitude });
         setSelectedHouse(house);
       } else {
         setSelectedHouse(house);
@@ -163,7 +163,7 @@ function MapScreen() {
             ? { lat: position.lat, lng: position.lng }
             : null;
       setDraft(start);
-      if (start) setFocus({ lat: start.lat, lng: start.lng, id: house.id });
+      if (start) setFocus({ lat: start.lat, lng: start.lng });
       else toast.info("Tap the map to place this house");
     },
     [position],
