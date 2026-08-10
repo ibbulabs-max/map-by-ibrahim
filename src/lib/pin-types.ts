@@ -66,6 +66,67 @@ export function pinTypeLabel(value: string, customType?: string | null): string 
   return pinTypeDef(value).label;
 }
 
+/** Extra spellings seen in imported spreadsheets, mapped onto existing pin types. */
+const PIN_TYPE_ALIASES: Record<string, string> = {
+  home: "house",
+  household: "house",
+  residence: "house",
+  house: "house",
+  lockedhouse: "locked_house",
+  locked: "locked_house",
+  housedlocked: "locked_house",
+  emptyland: "empty_land",
+  vacantland: "empty_land",
+  emptyplot: "empty_land",
+  openland: "empty_land",
+  plot: "empty_land",
+  vacant: "empty_land",
+  masjid: "mosque",
+  mosque: "mosque",
+  temple: "temple",
+  church: "church",
+  school: "school",
+  college: "college",
+  hospital: "hospital",
+  clinic: "hospital",
+  phc: "hospital",
+  shop: "shop",
+  store: "shop",
+  commercial: "shop",
+  office: "office",
+  govtoffice: "government_office",
+  governmentoffice: "government_office",
+  apartment: "apartment",
+  flat: "apartment",
+  construction: "construction",
+  underconstruction: "construction",
+  park: "park",
+  hotel: "hotel",
+  restaurant: "restaurant",
+  hotelrestaurant: "restaurant",
+  petrolpump: "petrol_pump",
+  fuelstation: "petrol_pump",
+  refused: "refused",
+  refusal: "refused",
+};
+
+/**
+ * Resolves a free-text spreadsheet "type" value onto the existing pin-type
+ * system. Unknown values are preserved as "other" + custom label, never lost.
+ */
+export function normalizePinType(raw: unknown): { pin_type: string; custom_type: string | null } {
+  const text = raw === null || raw === undefined ? "" : String(raw).trim();
+  if (!text) return { pin_type: "house", custom_type: null };
+  const key = text.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  if (PIN_TYPE_MAP[key]) return { pin_type: key, custom_type: null };
+  const snake = text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_");
+  if (PIN_TYPE_MAP[snake]) return { pin_type: snake, custom_type: null };
+  const alias = PIN_TYPE_ALIASES[key];
+  if (alias) return { pin_type: alias, custom_type: null };
+  return { pin_type: "other", custom_type: text };
+}
+
+
 export type Pin = {
   id: string;
   user_id: string;
