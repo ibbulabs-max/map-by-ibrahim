@@ -142,6 +142,11 @@ export type Pin = {
   notes: string | null;
   device_time: string | null;
   device_id: string | null;
+  surveyor?: string | null;
+  source?: string | null;
+  import_key?: string | null;
+  external_created_at?: string | null;
+  house_uuid?: string | null;
   created_at: string;
   updated_at: string;
 };
