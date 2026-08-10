@@ -350,7 +350,7 @@ function MapScreen() {
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-muted">
-      <div className="absolute inset-0 z-0 md:left-60">
+      <div className="absolute bottom-0 left-0 right-0 top-0 z-0 md:left-60">
         <Suspense
           fallback={
             <div className="grid h-full place-items-center">
@@ -379,7 +379,7 @@ function MapScreen() {
         </Suspense>
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex max-h-dvh flex-col overflow-y-auto px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-40 md:inset-x-auto md:left-60 md:w-[22rem] md:max-w-[calc(100vw-16rem)] md:pb-8">
+      <div className="pointer-events-none absolute left-0 right-0 top-0 z-20 flex max-h-dvh flex-col overflow-y-auto px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-40 md:left-60 md:right-auto md:w-[22rem] md:pb-8">
         <div className="glass pointer-events-auto flex items-center justify-between rounded-3xl px-4 py-3">
           <div>
             <p className="text-[15px] font-semibold leading-tight">Survey Map</p>
