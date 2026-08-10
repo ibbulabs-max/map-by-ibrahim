@@ -248,24 +248,33 @@ export default function LeafletMap({
       lastKey = sig;
 
       layer.clearLayers();
-      const cell = zoom >= 17 ? 0 : 0.6 / 2 ** (zoom - 4);
-      // At high zoom, still group pins within ~1.5 m so nothing is hidden underneath.
-      const exact = 0.000015;
+      // Cluster in SCREEN space: any pins whose 34px markers would overlap at the
+      // current zoom are grouped, so clustering reacts naturally to zooming.
+      const CELL = 44;
+      const exact = 0.000015; // ~1.5 m
       const groups = new Map<string, Pin[]>();
       for (const pin of list) {
-        const gkey =
-          cell === 0
-            ? `${Math.round(pin.latitude / exact)}:${Math.round(pin.longitude / exact)}`
-            : `${Math.round(pin.latitude / cell)}:${Math.round(pin.longitude / cell)}`;
+        const pt = map.project([pin.latitude, pin.longitude], zoom);
+        const gkey = `${Math.floor(pt.x / CELL)}:${Math.floor(pt.y / CELL)}`;
         const g = groups.get(gkey);
         if (g) g.push(pin);
         else groups.set(gkey, [pin]);
       }
 
       for (const group of groups.values()) {
-        const stacked = cell === 0 && group.length > 1;
+        const first = group[0]!;
+        // Pins sitting on (virtually) the same coordinates can never be separated
+        // by zooming, so they get the stacked marker instead of a cluster.
+        const sameSpot =
+          group.length > 1 &&
+          group.every(
+            (p) =>
+              Math.abs(p.latitude - first.latitude) < exact &&
+              Math.abs(p.longitude - first.longitude) < exact,
+          );
+        const stacked = sameSpot || (group.length > 1 && zoom >= 19);
         if (group.length === 1 || stacked) {
-          const pin = group[0]!;
+          const pin = first;
           const risk = riskRef.current?.[(pin.house_id ?? "").trim().toUpperCase()];
           const draggable = editRef.current && group.length === 1 && canMoveRef.current(pin);
           const marker = L.marker([pin.latitude, pin.longitude], {
@@ -295,16 +304,25 @@ export default function LeafletMap({
         } else {
           const lat = group.reduce((s, p) => s + p.latitude, 0) / group.length;
           const lng = group.reduce((s, p) => s + p.longitude, 0) / group.length;
+          const size = group.length > 99 ? 48 : group.length > 9 ? 42 : 36;
           L.marker([lat, lng], {
-            icon: L.divIcon({ html: clusterHtml(group.length), className: "", iconSize: [42, 42] }),
+            icon: L.divIcon({
+              html: clusterHtml(group.length),
+              className: "",
+              iconSize: [size, size],
+              iconAnchor: [size / 2, size / 2],
+            }),
           })
             .on("click", (e) => {
               L.DomEvent.stopPropagation(e as unknown as Event);
-              map.flyTo([lat, lng], Math.min(19, map.getZoom() + 3));
+              const next = Math.min(19, map.getZoom() + 2);
+              if (map.getZoom() >= 19) selectManyRef.current(group);
+              else map.flyTo([lat, lng], next, { duration: 0.6 });
             })
             .addTo(layer);
         }
       }
+
     };
 
     const schedule = () => {
