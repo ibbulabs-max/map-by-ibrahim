@@ -5,7 +5,8 @@ import { Home, Search } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
 import { EmptyState, GlassCard, ScreenShell } from "@/components/glass";
 import { HouseDetailsSheet } from "@/components/houses/HouseDetailsSheet";
-import { ImportPanel } from "@/components/houses/ImportPanel";
+import { MembersView } from "@/components/houses/MembersView";
+import { RecordsView } from "@/components/houses/RecordsView";
 import { useAuth } from "@/hooks/useAuth";
 import { useHouses } from "@/hooks/useHouses";
 import { locationStatusLabel, matchesHouseSearch, type House } from "@/lib/houses";
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/_authenticated/houses")({
   component: HousesScreen,
 });
 
-type View = "all" | "unmapped" | "import";
+type View = "all" | "unmapped" | "members" | "records";
 
 function HousesScreen() {
   const { isAdmin } = useAuth();
@@ -53,17 +54,18 @@ function HousesScreen() {
         subtitle={`${houses.length} houses · ${memberCount} members · ${unmappedCount} unmapped`}
       >
         <div className="space-y-3">
-          <div className="flex gap-1.5">
+          <div className="grid grid-cols-4 gap-1.5">
             {([
-              ["all", "All houses"],
+              ["all", "All"],
               ["unmapped", `Unmapped (${unmappedCount})`],
-              ...(isAdmin ? ([["import", "Import Excel"]] as const) : []),
+              ["members", "Members"],
+              ["records", "Records"],
             ] as [View, string][]).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
                 onClick={() => setView(value)}
-                className={`press flex-1 rounded-2xl px-2 py-2.5 text-[12px] font-semibold ${
+                className={`press rounded-2xl px-1.5 py-2.5 text-[11px] font-semibold ${
                   view === value ? "bg-primary-gradient text-primary-foreground" : "glass"
                 }`}
               >
@@ -72,8 +74,8 @@ function HousesScreen() {
             ))}
           </div>
 
-          {view === "import" ? (
-            <ImportPanel />
+          {view === "records" ? (
+            <RecordsView />
           ) : (
             <>
               <div className="glass flex items-center gap-2 rounded-2xl px-3.5 py-2.5">
@@ -86,13 +88,15 @@ function HousesScreen() {
                 />
               </div>
 
-              {isLoading ? null : filtered.length === 0 ? (
+              {view === "members" ? (
+                <MembersView houses={filtered} onOpenHouse={setSelected} />
+              ) : isLoading ? null : filtered.length === 0 ? (
                 <EmptyState
                   icon={<Home className="size-7" />}
                   title="No houses yet"
                   description={
                     isAdmin
-                      ? "Import your survey spreadsheet to create the canonical house records."
+                      ? "Import survey spreadsheets from Settings → Data Management to create house records."
                       : "Houses assigned to you will appear here."
                   }
                 />

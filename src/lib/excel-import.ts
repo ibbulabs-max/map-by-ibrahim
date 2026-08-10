@@ -37,27 +37,64 @@ export type SheetData = {
   columns: DetectedColumn[];
 };
 
-const RULES: { field: AppField; test: RegExp }[] = [
-  { field: "house_id", test: /^(house[\s_-]?id|hid|household[\s_-]?id|house[\s_-]?code)$/i },
-  { field: "house_number", test: /(house[\s_-]?(no|num|number)|door[\s_-]?(no|num|number)|h[\s_-]?no)/i },
-  { field: "member_id", test: /^(member[\s_-]?id|mid|person[\s_-]?id|member[\s_-]?code)$/i },
-  { field: "member_name", test: /(member[\s_-]?name|person[\s_-]?name|^name$|full[\s_-]?name)/i },
-  { field: "latitude", test: /^(lat|latitude)$/i },
-  { field: "longitude", test: /^(lon|lng|long|longitude)$/i },
-  { field: "status", test: /^(status|house[\s_-]?status)$/i },
-];
+/** Collapses "House ID", "HOUSE_ID", "house id" … to one comparable token. */
+export function normalizeKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/** Stable snake_case key used to store an extra column, so files union cleanly. */
+export function canonicalExtraKey(name: string): string {
+  return (
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "field"
+  );
+}
+
+/** Known aliases per logical field — matched on the normalized token. */
+const ALIASES: Record<Exclude<AppField, "ignore" | "extra">, string[]> = {
+  house_id: ["houseid", "hid", "householdid", "housecode", "hhid", "houseidno", "houseidnumber"],
+  house_number: [
+    "housenumber",
+    "houseno",
+    "housenum",
+    "doorno",
+    "doornumber",
+    "doornum",
+    "hno",
+    "hhno",
+    "housedoorno",
+    "address",
+    "houseaddress",
+  ],
+  member_id: ["memberid", "mid", "personid", "membercode", "individualid", "patientid"],
+  member_name: ["membername", "personname", "name", "fullname", "individualname", "patientname"],
+  status: ["status", "housestatus", "surveystatus"],
+  latitude: ["lat", "latitude", "ycoordinate", "ycoord"],
+  longitude: ["lon", "lng", "long", "longitude", "xcoordinate", "xcoord"],
+};
+
+/** Detects the logical field for a raw spreadsheet column name. */
+export function detectField(name: string): AppField | null {
+  const key = normalizeKey(name);
+  if (!key) return null;
+  for (const [field, aliases] of Object.entries(ALIASES)) {
+    if (aliases.includes(key)) return field as AppField;
+  }
+  if (/^house.*id$/.test(key) || /^hh.*id$/.test(key)) return "house_id";
+  if (/^member.*id$/.test(key)) return "member_id";
+  if (/^member.*name$/.test(key)) return "member_name";
+  if (/house.*(no|num)/.test(key) || /door.*(no|num)/.test(key)) return "house_number";
+  return null;
+}
 
 function guessField(name: string, used: Set<AppField>): AppField {
-  for (const rule of RULES) {
-    if (rule.test.test(name.trim()) && !used.has(rule.field)) {
-      used.add(rule.field);
-      return rule.field;
-    }
-  }
-  // looser house id match as a fallback
-  if (!used.has("house_id") && /house.*id/i.test(name)) {
-    used.add("house_id");
-    return "house_id";
+  const detected = detectField(name);
+  if (detected && !used.has(detected)) {
+    used.add(detected);
+    return detected;
   }
   return "extra";
 }
@@ -173,7 +210,7 @@ export function prepareImport(rows: Record<string, unknown>[], columns: Detected
     const extra: Record<string, unknown> = {};
     for (const col of extraCols) {
       const v = str(row[col]);
-      if (v !== null) extra[col] = v;
+      if (v !== null) extra[canonicalExtraKey(col)] = v;
     }
 
     let house = map.get(key);

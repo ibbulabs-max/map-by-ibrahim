@@ -49,7 +49,11 @@ export type Database = {
           id: string
           member_id: string | null
           member_name: string | null
+          possible_duplicate: boolean
+          source_files: Json
           updated_at: string
+          uploaded_at: string | null
+          uploaded_by: string | null
         }
         Insert: {
           created_at?: string
@@ -58,7 +62,11 @@ export type Database = {
           id?: string
           member_id?: string | null
           member_name?: string | null
+          possible_duplicate?: boolean
+          source_files?: Json
           updated_at?: string
+          uploaded_at?: string | null
+          uploaded_by?: string | null
         }
         Update: {
           created_at?: string
@@ -67,7 +75,11 @@ export type Database = {
           id?: string
           member_id?: string | null
           member_name?: string | null
+          possible_duplicate?: boolean
+          source_files?: Json
           updated_at?: string
+          uploaded_at?: string | null
+          uploaded_by?: string | null
         }
         Relationships: [
           {
@@ -96,9 +108,12 @@ export type Database = {
           mapped_at: string | null
           mapped_by: string | null
           pin_id: string | null
+          source_files: Json
           status: string | null
           supervisor_id: string | null
           updated_at: string
+          uploaded_at: string | null
+          uploaded_by: string | null
         }
         Insert: {
           accuracy?: number | null
@@ -116,9 +131,12 @@ export type Database = {
           mapped_at?: string | null
           mapped_by?: string | null
           pin_id?: string | null
+          source_files?: Json
           status?: string | null
           supervisor_id?: string | null
           updated_at?: string
+          uploaded_at?: string | null
+          uploaded_by?: string | null
         }
         Update: {
           accuracy?: number | null
@@ -136,9 +154,12 @@ export type Database = {
           mapped_at?: string | null
           mapped_by?: string | null
           pin_id?: string | null
+          source_files?: Json
           status?: string | null
           supervisor_id?: string | null
           updated_at?: string
+          uploaded_at?: string | null
+          uploaded_by?: string | null
         }
         Relationships: [
           {
@@ -160,6 +181,147 @@ export type Database = {
             columns: ["supervisor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_batches: {
+        Row: {
+          assigned_to: string | null
+          assigned_to_name: string | null
+          conflicts: number
+          created_at: string
+          file_names: Json
+          houses_added: number
+          houses_updated: number
+          id: string
+          members_added: number
+          members_merged: number
+          merged_records: number
+          new_fields: Json
+          status: string
+          supervisor_id: string | null
+          total_rows: number
+          unique_houses: number
+          unmapped_houses: number
+          updated_at: string
+          uploaded_by: string
+          uploaded_by_name: string | null
+          uploaded_role: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          assigned_to_name?: string | null
+          conflicts?: number
+          created_at?: string
+          file_names?: Json
+          houses_added?: number
+          houses_updated?: number
+          id?: string
+          members_added?: number
+          members_merged?: number
+          merged_records?: number
+          new_fields?: Json
+          status?: string
+          supervisor_id?: string | null
+          total_rows?: number
+          unique_houses?: number
+          unmapped_houses?: number
+          updated_at?: string
+          uploaded_by: string
+          uploaded_by_name?: string | null
+          uploaded_role?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          assigned_to_name?: string | null
+          conflicts?: number
+          created_at?: string
+          file_names?: Json
+          houses_added?: number
+          houses_updated?: number
+          id?: string
+          members_added?: number
+          members_merged?: number
+          merged_records?: number
+          new_fields?: Json
+          status?: string
+          supervisor_id?: string | null
+          total_rows?: number
+          unique_houses?: number
+          unmapped_houses?: number
+          updated_at?: string
+          uploaded_by?: string
+          uploaded_by_name?: string | null
+          uploaded_role?: string | null
+        }
+        Relationships: []
+      }
+      import_conflicts: {
+        Row: {
+          batch_id: string | null
+          created_at: string
+          entity: string
+          existing_value: string | null
+          field: string
+          house_id: string
+          house_uuid: string | null
+          id: string
+          member_ref: string | null
+          new_value: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          source_file: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          batch_id?: string | null
+          created_at?: string
+          entity?: string
+          existing_value?: string | null
+          field: string
+          house_id: string
+          house_uuid?: string | null
+          id?: string
+          member_ref?: string | null
+          new_value?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_file?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          batch_id?: string | null
+          created_at?: string
+          entity?: string
+          existing_value?: string | null
+          field?: string
+          house_id?: string
+          house_uuid?: string | null
+          id?: string
+          member_ref?: string | null
+          new_value?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          source_file?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_conflicts_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_conflicts_house_uuid_fkey"
+            columns: ["house_uuid"]
+            isOneToOne: false
+            referencedRelation: "houses"
             referencedColumns: ["id"]
           },
         ]

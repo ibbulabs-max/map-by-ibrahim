@@ -1,6 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import Papa from "papaparse";
-import { Download, Info, LocateFixed, LogOut, RefreshCw, Trash2 } from "lucide-react";
+import { Database, Download, Info, LocateFixed, LogOut, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -72,6 +72,20 @@ function SettingsScreen() {
         </GlassCard>
 
         <div className="mt-4 space-y-2.5">
+          <Link
+            to="/data-management"
+            className="press glass flex w-full items-center gap-3 rounded-3xl px-4 py-3.5 text-left"
+          >
+            <span className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Database className="size-[18px]" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[15px] font-medium">Data Management</span>
+              <span className="block truncate text-[12px] text-muted-foreground">
+                Excel import, import history, data assignment and conflicts
+              </span>
+            </span>
+          </Link>
           <ActionRow
             icon={<Download className="size-[18px]" />}
             label={exporting ? "Exporting…" : "Export records as CSV"}
