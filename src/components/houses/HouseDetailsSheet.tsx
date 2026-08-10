@@ -343,11 +343,13 @@ function MemberCard({
   editing,
   onSave,
   onRemove,
+  onOpenSurvey,
 }: {
   member: HouseMember;
   editing: boolean;
   onSave: (patch: Partial<HouseMember>) => void;
   onRemove: () => void;
+  onOpenSurvey: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [id, setId] = useState(member.member_id ?? "");
@@ -356,21 +358,37 @@ function MemberCard({
 
   return (
     <div className="rounded-2xl border border-border bg-card/70 px-3.5 py-3">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 text-left"
-      >
-        <span className="min-w-0">
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={onOpenSurvey}
+          className="min-w-0 flex-1 text-left"
+        >
           <span className="block truncate text-[14px] font-semibold">
             {member.member_name || "Unnamed member"}
           </span>
           <span className="block truncate text-[11px] text-muted-foreground">
-            {member.member_id || "No member ID"}
+            {member.member_id || "No member ID"} · {extras.length} survey field
+            {extras.length === 1 ? "" : "s"}
           </span>
-        </span>
-        <span className="text-[11px] text-muted-foreground">{open ? "Hide" : "Details"}</span>
-      </button>
+        </button>
+        <button
+          type="button"
+          onClick={onOpenSurvey}
+          className="press shrink-0 rounded-full bg-primary/10 px-3 py-1.5 text-[11px] font-semibold text-primary"
+        >
+          Details
+        </button>
+        {editing ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="press shrink-0 rounded-full bg-card px-3 py-1.5 text-[11px] font-semibold text-muted-foreground"
+          >
+            {open ? "Close" : "Edit"}
+          </button>
+        ) : null}
+      </div>
 
       {open ? (
         <div className="mt-2.5 space-y-2">
@@ -381,6 +399,7 @@ function MemberCard({
               ))}
             </dl>
           ) : null}
+
 
           {editing ? (
             <div className="space-y-2">
