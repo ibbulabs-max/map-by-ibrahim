@@ -69,7 +69,7 @@ export function useUpdateHouse() {
       patch: Partial<House>;
       action?: string;
     }) => {
-      const { error } = await supabase.from("houses").update(patch).eq("id", house.id);
+      const { error } = await supabase.from("houses").update(patch as never).eq("id", house.id);
       if (error) throw error;
       const before: Record<string, unknown> = {};
       for (const key of Object.keys(patch)) before[key] = (house as Record<string, unknown>)[key];
@@ -98,7 +98,7 @@ export function useSaveMember() {
       patch: Partial<HouseMember>;
     }) => {
       if (member) {
-        const { error } = await supabase.from("house_members").update(patch).eq("id", member.id);
+        const { error } = await supabase.from("house_members").update(patch as never).eq("id", member.id);
         if (error) throw error;
         await audit("member_updated", {
           house_uuid: house.id,
@@ -111,7 +111,7 @@ export function useSaveMember() {
       }
       const { error } = await supabase
         .from("house_members")
-        .insert({ house_uuid: house.id, ...patch, data: patch.data ?? {} });
+        .insert({ house_uuid: house.id, ...patch, data: patch.data ?? {} } as never);
       if (error) throw error;
       await audit("member_added", {
         house_uuid: house.id,
@@ -241,7 +241,7 @@ export function useImportHouses() {
                 }
               : {}),
           };
-          const { error } = await supabase.from("houses").update(patch).eq("id", found.id);
+          const { error } = await supabase.from("houses").update(patch as never).eq("id", found.id);
           if (error) throw error;
           houseUuid = found.id;
           result.updated += 1;
@@ -259,7 +259,7 @@ export function useImportHouses() {
               location_status: mapped ? "mapped" : "not_mapped",
               location_source: mapped ? "import" : null,
               created_by: userId,
-            })
+            } as never)
             .select("id")
             .single();
           if (error) throw error;
@@ -284,7 +284,7 @@ export function useImportHouses() {
               data: m.data,
             }));
           if (inserts.length) {
-            const { error } = await supabase.from("house_members").insert(inserts);
+            const { error } = await supabase.from("house_members").insert(inserts as never);
             if (error) throw error;
             result.members += inserts.length;
           }
