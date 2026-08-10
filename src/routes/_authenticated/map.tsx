@@ -91,16 +91,54 @@ function MapScreen() {
   const [showPins, setShowPins] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const pins = useMemo(
-    () => (types.length ? scopedPins.filter((p) => types.includes(p.pin_type)) : scopedPins),
-    [scopedPins, types],
+  // ---- houses: search, details, add / move location ----
+  const { data: houses = [] } = useHouses();
+  const saveHouseLocation = useSaveHouseLocation();
+  const [houseTerm, setHouseTerm] = useState("");
+  const [houseOpen, setHouseOpen] = useState(false);
+  const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
+  const [locating, setLocating] = useState<House | null>(null);
+
+  const houseMatches = useMemo(
+    () => (houseTerm.trim() ? houses.filter((h) => matchesHouseSearch(h, houseTerm)) : []),
+    [houses, houseTerm],
   );
+
+  /** House IDs matching the active search — the same canonical search used by Houses. */
+  const searchHouseIds = useMemo(() => {
+    if (!houseTerm.trim()) return null;
+    const ids = new Set<string>();
+    for (const h of houseMatches) {
+      ids.add(h.house_id.trim().toUpperCase());
+      if (h.house_number) ids.add(h.house_number.trim().toUpperCase());
+    }
+    return ids;
+  }, [houseMatches, houseTerm]);
+
+  const pins = useMemo(() => {
+    let list = types.length ? scopedPins.filter((p) => types.includes(p.pin_type)) : scopedPins;
+    if (searchHouseIds) {
+      const q = houseTerm.trim().toLowerCase();
+      list = list.filter((p) => {
+        const hid = (p.house_id ?? "").trim().toUpperCase();
+        const hno = (p.house_number ?? "").trim().toUpperCase();
+        if (hid && searchHouseIds.has(hid)) return true;
+        if (hno && searchHouseIds.has(hno)) return true;
+        return (
+          hid.toLowerCase().includes(q) ||
+          hno.toLowerCase().includes(q) ||
+          (p.owner_name ?? "").toLowerCase().includes(q)
+        );
+      });
+    }
+    return list;
+  }, [scopedPins, types, searchHouseIds, houseTerm]);
 
   const countOf = useCallback(
     (list: Pin[], type: string) => list.filter((p) => p.pin_type === type).length,
     [],
   );
-  const filtered = types.length > 0;
+  const filtered = types.length > 0 || Boolean(searchHouseIds);
   const counterSource = filtered ? pins : scopedPins;
   const counters = {
     total: counterSource.length,
@@ -124,19 +162,6 @@ function MapScreen() {
   const [focus, setFocus] = useState<{ lat: number; lng: number } | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [move, setMove] = useState<{ pin: Pin; lat: number; lng: number } | null>(null);
-
-  // ---- houses: search, details, add / move location ----
-  const { data: houses = [] } = useHouses();
-  const saveHouseLocation = useSaveHouseLocation();
-  const [houseTerm, setHouseTerm] = useState("");
-  const [houseOpen, setHouseOpen] = useState(false);
-  const [selectedHouse, setSelectedHouse] = useState<House | null>(null);
-  const [locating, setLocating] = useState<House | null>(null);
-
-  const houseMatches = useMemo(
-    () => (houseTerm.trim() ? houses.filter((h) => matchesHouseSearch(h, houseTerm)).slice(0, 20) : []),
-    [houses, houseTerm],
-  );
 
   // Health risk per House ID, so map pins can carry the red/yellow/green ring.
   const riskByHouse = useMemo(() => {
@@ -354,7 +379,7 @@ function MapScreen() {
         </Suspense>
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 max-h-dvh overflow-y-auto px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-40">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex max-h-dvh flex-col overflow-y-auto px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-40 md:inset-x-auto md:left-0 md:w-[22rem] md:max-w-[calc(100vw-16rem)] md:pb-8">
         <div className="glass pointer-events-auto flex items-center justify-between rounded-3xl px-4 py-3">
           <div>
             <p className="text-[15px] font-semibold leading-tight">Survey Map</p>
@@ -387,7 +412,7 @@ function MapScreen() {
           </div>
           {houseOpen && houseMatches.length ? (
             <div className="mt-2 max-h-52 space-y-1.5 overflow-y-auto pr-1">
-              {houseMatches.map((h) => (
+              {houseMatches.slice(0, 20).map((h) => (
                 <button
                   key={h.id}
                   type="button"
@@ -670,7 +695,7 @@ function MapScreen() {
           setEditMode((v) => !v);
           setMove(null);
         }}
-        className={`press glass absolute bottom-60 right-4 z-30 grid size-12 place-items-center rounded-2xl ${
+        className={`press glass absolute bottom-60 right-4 z-30 md:bottom-40 grid size-12 place-items-center rounded-2xl ${
           editMode ? "bg-primary-gradient text-primary-foreground" : "text-primary"
         }`}
         aria-label="Edit pin locations"
@@ -681,7 +706,7 @@ function MapScreen() {
       <button
         type="button"
         onClick={() => position && setFocus({ lat: position.lat, lng: position.lng })}
-        className="press glass absolute bottom-44 right-4 z-30 grid size-12 place-items-center rounded-2xl text-primary"
+        className="press glass absolute bottom-44 right-4 z-30 md:bottom-24 grid size-12 place-items-center rounded-2xl text-primary"
         aria-label="Center on my location"
       >
         <Crosshair className="size-5" />
@@ -690,7 +715,7 @@ function MapScreen() {
       <button
         type="button"
         onClick={startPlacing}
-        className="press glass-strong absolute bottom-28 right-4 z-30 grid size-16 place-items-center rounded-full text-primary shadow-[var(--shadow-float)]"
+        className="press glass-strong absolute bottom-28 right-4 z-30 md:bottom-6 grid size-16 place-items-center rounded-full text-primary shadow-[var(--shadow-float)]"
         aria-label="Add pin"
       >
         <Plus className="size-7" strokeWidth={2.6} />
