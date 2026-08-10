@@ -405,20 +405,64 @@ function MemberCard({
   );
 }
 
-function DataTab({ house }: { house: House }) {
-  const entries = Object.entries(house.data ?? {});
-  if (!entries.length) {
-    return (
-      <p className="rounded-2xl border border-border bg-card/70 px-4 py-6 text-center text-[13px] text-muted-foreground">
-        No extra imported fields for this house.
-      </p>
-    );
-  }
+const HOUSE_SCOPE = "__house__";
+
+/** Survey data is always shown for ONE selected member (or the house itself). */
+function DataTab({
+  house,
+  members,
+  selected,
+  onSelect,
+}: {
+  house: House;
+  members: HouseMember[];
+  selected: string;
+  onSelect: (value: string) => void;
+}) {
+  const scope = members.some((m) => m.id === selected) ? selected : HOUSE_SCOPE;
+  const member = members.find((m) => m.id === scope) ?? null;
+  const entries = Object.entries((member ? member.data : house.data) ?? {});
+
   return (
-    <dl className="grid grid-cols-2 gap-2">
-      {entries.map(([key, value]) => (
-        <Row key={key} label={fieldLabel(key)} value={displayValue(value)} />
-      ))}
-    </dl>
+    <div className="space-y-2.5">
+      <label className="block text-[11px] font-medium text-muted-foreground">
+        Survey data for
+        <select
+          value={scope}
+          onChange={(e) => onSelect(e.target.value)}
+          className="mt-1 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[13px] font-semibold text-foreground outline-none"
+        >
+          <option value={HOUSE_SCOPE}>House-level data ({house.house_id})</option>
+          {members.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.member_name || "Unnamed member"}
+              {m.member_id ? ` · ${m.member_id}` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {member ? (
+        <p className="rounded-2xl bg-primary/10 px-3.5 py-2 text-[11px] font-medium text-primary">
+          Showing survey answers recorded for {member.member_name || "this member"}
+          {member.member_id ? ` (${member.member_id})` : ""}.
+        </p>
+      ) : null}
+
+      {entries.length ? (
+        <dl className="grid grid-cols-2 gap-2">
+          {entries.map(([key, value]) => (
+            <Row key={key} label={fieldLabel(key)} value={displayValue(value)} />
+          ))}
+        </dl>
+      ) : (
+        <p className="rounded-2xl border border-border bg-card/70 px-4 py-6 text-center text-[13px] text-muted-foreground">
+          {member
+            ? "No survey data recorded for this member yet."
+            : "No extra imported fields for this house."}
+        </p>
+      )}
+    </div>
   );
 }
+
