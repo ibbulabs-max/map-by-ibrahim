@@ -8,6 +8,7 @@ import { HouseDetailsSheet } from "@/components/houses/HouseDetailsSheet";
 import {
   DEFAULT_HOUSE_FILTERS,
   HouseFilterBar,
+  filterHouses,
   type HouseFilters,
 } from "@/components/houses/HouseFilterBar";
 import { MembersView } from "@/components/houses/MembersView";
@@ -52,35 +53,20 @@ function HousesScreen() {
     return out;
   }, [houses]);
 
-  const availableTypes = useMemo(
-    () => [...new Set(houses.map((h) => h.pin_type ?? "house"))],
-    [houses],
-  );
-
   const filtered = useMemo(() => {
     const base = view === "unmapped" ? houses.filter((h) => h.latitude === null) : houses;
-    const list = base.filter((h) => {
-      if (!matchesHouseSearch(h, term)) return false;
-      if (filters.mineOnly && h.assigned_csw_id !== session?.user.id) return false;
-      if (filters.typeFilter && (h.pin_type ?? "house") !== filters.typeFilter) return false;
-      if (filters.riskFilter && riskById.get(h.id)?.level !== filters.riskFilter) return false;
-      return true;
-    });
-    return [...list].sort((a, b) => {
-      if (filters.sort === "house") return a.house_id.localeCompare(b.house_id);
-      if (filters.sort === "oldest") return a.created_at.localeCompare(b.created_at);
-      return b.created_at.localeCompare(a.created_at);
-    });
-  }, [houses, view, term, filters, riskById, session?.user.id]);
+    return filterHouses({ houses: base, term, filters, userId: session?.user.id });
+  }, [houses, view, term, filters, session?.user.id]);
 
   const unmappedCount = houses.filter((h) => h.latitude === null).length;
-  const memberCount = houses.reduce((s, h) => s + (h.house_members?.length ?? 0), 0);
+  const memberCount = filtered.reduce((s, h) => s + (h.house_members?.length ?? 0), 0);
+
 
   return (
     <>
       <ScreenShell
         title="Houses"
-        subtitle={`${houses.length} houses · ${memberCount} members · ${unmappedCount} unmapped`}
+        subtitle={`${filtered.length} of ${houses.length} houses · ${memberCount} members · ${unmappedCount} unmapped`}
       >
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-1.5">
@@ -112,7 +98,7 @@ function HousesScreen() {
             />
           </div>
 
-          <HouseFilterBar value={filters} onChange={setFilters} availableTypes={availableTypes} />
+          <HouseFilterBar value={filters} onChange={setFilters} houses={houses} />
 
           {view === "members" ? (
             <MembersView houses={filtered} onOpenHouse={setSelected} />
