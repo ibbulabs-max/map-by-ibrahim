@@ -117,6 +117,12 @@ export function ExcelImportPanel() {
     [houses],
   );
 
+  const houseByKey = useMemo(
+    () => new Map(houses.map((h) => [h.house_id.toUpperCase(), h])),
+    [houses],
+  );
+
+
   const knownFields = useMemo(() => {
     const set = new Set<string>();
     for (const h of houses) {
