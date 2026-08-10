@@ -222,8 +222,9 @@ export function ExcelImportPanel() {
           setProgress(null);
           setFiles([]);
           toast.success(
-            `Imported — ${r.housesAdded} new houses, ${r.housesUpdated} updated, ${r.membersAdded} members added, ${r.conflicts} conflicts`,
+            `Imported — ${r.housesAdded} new houses, ${r.housesUpdated} updated, ${r.membersAdded} members added, ${r.pinsAdded} map pins added, ${r.locationsAdded} locations mapped, ${r.conflicts} conflicts`,
           );
+
         },
         onError: (e) => {
           setProgress(null);
