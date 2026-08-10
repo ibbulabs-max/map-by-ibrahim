@@ -8,6 +8,7 @@ import { HouseDetailsSheet } from "@/components/houses/HouseDetailsSheet";
 import {
   DEFAULT_HOUSE_FILTERS,
   HouseFilterBar,
+  filterHouses,
   type HouseFilters,
 } from "@/components/houses/HouseFilterBar";
 import { MembersView } from "@/components/houses/MembersView";
@@ -65,7 +66,7 @@ function HousesScreen() {
     <>
       <ScreenShell
         title="Houses"
-        subtitle={`${houses.length} houses · ${memberCount} members · ${unmappedCount} unmapped`}
+        subtitle={`${filtered.length} of ${houses.length} houses · ${memberCount} members · ${unmappedCount} unmapped`}
       >
         <div className="space-y-3">
           <div className="grid grid-cols-3 gap-1.5">
@@ -97,7 +98,7 @@ function HousesScreen() {
             />
           </div>
 
-          <HouseFilterBar value={filters} onChange={setFilters} availableTypes={availableTypes} />
+          <HouseFilterBar value={filters} onChange={setFilters} houses={houses} />
 
           {view === "members" ? (
             <MembersView houses={filtered} onOpenHouse={setSelected} />
