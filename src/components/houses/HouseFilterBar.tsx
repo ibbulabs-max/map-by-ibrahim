@@ -75,7 +75,7 @@ export function filterHouses({
   houses: House[];
   term: string;
   filters: HouseFilters;
-  userId?: string | null;
+  userId?: string | null | undefined;
 }): House[] {
   const list = houses.filter((h) => {
     if (!matchesHouseSearch(h, term)) return false;
