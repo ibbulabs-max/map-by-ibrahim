@@ -108,6 +108,10 @@ export function HouseDetailsSheet({ house, onOpenChange, onAddLocation }: Props)
               <MembersTab
                 members={members}
                 editing={editing}
+                onOpenSurvey={(member) => {
+                  setSurveyMember(member.id);
+                  setTab("data");
+                }}
                 onSave={(member, patch) =>
                   saveMember.mutate(
                     member ? { house, member, patch } : { house, patch },
@@ -129,7 +133,15 @@ export function HouseDetailsSheet({ house, onOpenChange, onAddLocation }: Props)
               />
             ) : null}
 
-            {tab === "data" ? <DataTab house={house} /> : null}
+            {tab === "data" ? (
+              <DataTab
+                house={house}
+                members={members}
+                selected={surveyMember}
+                onSelect={setSurveyMember}
+              />
+            ) : null}
+
           </div>
         </div>
       </DrawerContent>
