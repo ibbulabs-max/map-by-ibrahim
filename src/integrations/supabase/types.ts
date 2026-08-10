@@ -41,6 +41,129 @@ export type Database = {
         }
         Relationships: []
       }
+      house_members: {
+        Row: {
+          created_at: string
+          data: Json
+          house_uuid: string
+          id: string
+          member_id: string | null
+          member_name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data?: Json
+          house_uuid: string
+          id?: string
+          member_id?: string | null
+          member_name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          house_uuid?: string
+          id?: string
+          member_id?: string | null
+          member_name?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "house_members_house_uuid_fkey"
+            columns: ["house_uuid"]
+            isOneToOne: false
+            referencedRelation: "houses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      houses: {
+        Row: {
+          accuracy: number | null
+          assigned_csw_id: string | null
+          created_at: string
+          created_by: string | null
+          data: Json
+          house_id: string
+          house_number: string | null
+          id: string
+          latitude: number | null
+          location_source: string | null
+          location_status: string
+          longitude: number | null
+          mapped_at: string | null
+          mapped_by: string | null
+          pin_id: string | null
+          status: string | null
+          supervisor_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          accuracy?: number | null
+          assigned_csw_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          house_id: string
+          house_number?: string | null
+          id?: string
+          latitude?: number | null
+          location_source?: string | null
+          location_status?: string
+          longitude?: number | null
+          mapped_at?: string | null
+          mapped_by?: string | null
+          pin_id?: string | null
+          status?: string | null
+          supervisor_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accuracy?: number | null
+          assigned_csw_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          house_id?: string
+          house_number?: string | null
+          id?: string
+          latitude?: number | null
+          location_source?: string | null
+          location_status?: string
+          longitude?: number | null
+          mapped_at?: string | null
+          mapped_by?: string | null
+          pin_id?: string | null
+          status?: string | null
+          supervisor_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "houses_assigned_csw_id_fkey"
+            columns: ["assigned_csw_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "houses_pin_id_fkey"
+            columns: ["pin_id"]
+            isOneToOne: false
+            referencedRelation: "pins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "houses_supervisor_id_fkey"
+            columns: ["supervisor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       login_attempts: {
         Row: {
           fail_count: number
@@ -220,6 +343,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_access_house: {
+        Args: { _house: string; _user: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Map, List, Settings, User, ShieldCheck, Users } from "lucide-react";
+import { Map, List, Settings, User, ShieldCheck, Users, Home } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
@@ -10,15 +10,16 @@ type NavItem = { to: string; label: string; icon: LucideIcon };
 
 const MAP: NavItem = { to: "/map", label: "Map", icon: Map };
 const TEAM: NavItem = { to: "/team", label: "Team", icon: Users };
+const HOUSES: NavItem = { to: "/houses", label: "Houses", icon: Home };
 const RECORDS: NavItem = { to: "/records", label: "Records", icon: List };
 const ADMIN: NavItem = { to: "/admin", label: "Admin", icon: ShieldCheck };
 const SETTINGS: NavItem = { to: "/settings", label: "Settings", icon: Settings };
 const PROFILE: NavItem = { to: "/profile", label: "Profile", icon: User };
 
 function itemsFor(isAdmin: boolean, isSupervisor: boolean): NavItem[] {
-  if (isAdmin) return [MAP, ADMIN, TEAM, RECORDS, SETTINGS, PROFILE];
-  if (isSupervisor) return [MAP, TEAM, RECORDS, SETTINGS, PROFILE];
-  return [MAP, RECORDS, SETTINGS, PROFILE];
+  if (isAdmin) return [MAP, HOUSES, ADMIN, TEAM, RECORDS, SETTINGS, PROFILE];
+  if (isSupervisor) return [MAP, HOUSES, TEAM, RECORDS, SETTINGS, PROFILE];
+  return [MAP, HOUSES, RECORDS, SETTINGS, PROFILE];
 }
 
 /**
