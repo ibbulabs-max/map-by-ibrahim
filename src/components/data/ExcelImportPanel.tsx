@@ -415,6 +415,15 @@ export function ExcelImportPanel() {
               ["Missing house ID", stats.missingHouseId],
               ["Unmapped", stats.unmapped],
               ["New fields", stats.newFields.length],
+              ["With coordinates", stats.withCoords],
+              ["Without coordinates", stats.withoutCoords],
+              ["Invalid coordinates", stats.invalidCoords],
+              ["Houses with location", stats.housesWithCoords],
+              ["Generic map pins", stats.genericPins],
+              ["New map records", stats.newMapRecords],
+              ["Existing map records", stats.existingMapRecords],
+              ["Location updates", stats.locationUpdates],
+              ["Location conflicts", stats.locationConflicts],
             ].map(([label, value]) => (
               <div key={String(label)} className="rounded-xl bg-background/70 px-2 py-2">
                 <p className="text-[15px] font-semibold tabular-nums">{value}</p>
@@ -422,6 +431,28 @@ export function ExcelImportPanel() {
               </div>
             ))}
           </div>
+
+          {Object.keys(stats.typeCounts).length ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {Object.entries(stats.typeCounts).map(([type, count]) => (
+                <span
+                  key={type}
+                  className="rounded-full bg-background/70 px-2.5 py-1 text-[11px] font-medium"
+                >
+                  {fieldLabel(type)} · {count}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {stats.locationConflicts ? (
+            <p className="mt-2 rounded-2xl bg-amber-500/15 px-3 py-2 text-[11px] text-amber-700">
+              {stats.locationConflicts} location conflict
+              {stats.locationConflicts === 1 ? "" : "s"} — existing coordinates are kept and sent to
+              the Conflicts tab for review.
+            </p>
+          ) : null}
+
 
           {stats.newFields.length ? (
             <p className="mt-2 rounded-2xl bg-primary/10 px-3 py-2 text-[11px] text-primary">
