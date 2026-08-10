@@ -24,7 +24,9 @@ type Props = {
 export function HouseDetailsSheet({ house, onOpenChange, onAddLocation }: Props) {
   const { isAdmin, isSupervisor, session } = useAuth();
   const [tab, setTab] = useState<Tab>("house");
+  const [surveyMember, setSurveyMember] = useState<string>("__house__");
   const [editing, setEditing] = useState(false);
+
   const updateHouse = useUpdateHouse();
   const saveMember = useSaveMember();
   const deleteMember = useDeleteMember();
