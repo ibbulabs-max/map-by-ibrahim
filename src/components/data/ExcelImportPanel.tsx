@@ -126,10 +126,45 @@ export function ExcelImportPanel() {
     return set;
   }, [houses]);
 
+  const existingPinKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const p of pins) {
+      if (p.import_key) keys.add(p.import_key);
+      if (p.house_id) keys.add(`house:${p.house_id.trim().toUpperCase()}`);
+    }
+    return keys;
+  }, [pins]);
+
   const stats = useMemo(() => {
     if (!merged) return null;
     let existing = 0;
     for (const h of merged.houses) if (existingIds.has(h.house_id.toUpperCase())) existing += 1;
+
+    const housesWithCoords = merged.houses.filter((h) => h.location !== null);
+    let locationUpdates = 0;
+    let locationConflicts = 0;
+    let existingMapRecords = 0;
+    let newMapRecords = 0;
+
+    for (const h of housesWithCoords) {
+      const current = houseByKey.get(h.house_id.toUpperCase());
+      if (current && current.latitude !== null && current.longitude !== null) {
+        if (
+          Math.abs(current.latitude - h.location!.latitude) > 0.000015 ||
+          Math.abs(current.longitude - h.location!.longitude) > 0.000015
+        )
+          locationConflicts += 1;
+      } else {
+        locationUpdates += 1;
+      }
+      if (existingPinKeys.has(`house:${h.house_id.toUpperCase()}`)) existingMapRecords += 1;
+      else newMapRecords += 1;
+    }
+    for (const p of merged.places) {
+      if (existingPinKeys.has(`place:${p.key}`)) existingMapRecords += 1;
+      else newMapRecords += 1;
+    }
+
     return {
       files: files.length,
       rows: merged.totalRows,
@@ -141,11 +176,22 @@ export function ExcelImportPanel() {
       duplicates: merged.duplicateRows,
       conflicts: merged.conflicts.length,
       missingHouseId: merged.missingHouseId,
-      unmapped: merged.houses.filter((h) => h.latitude === null).length,
+      unmapped: merged.houses.filter((h) => h.location === null).length,
       newFields: merged.fields.filter((f) => !knownFields.has(f)),
       possibleDuplicateMembers: merged.possibleDuplicateMembers,
+      withCoords: merged.rowsWithCoords,
+      withoutCoords: merged.rowsWithoutCoords,
+      invalidCoords: merged.invalidCoords,
+      housesWithCoords: housesWithCoords.length,
+      genericPins: merged.places.length,
+      newMapRecords,
+      existingMapRecords,
+      locationUpdates,
+      locationConflicts,
+      typeCounts: merged.typeCounts,
     };
-  }, [merged, existingIds, files.length, knownFields]);
+  }, [merged, existingIds, files.length, knownFields, houseByKey, existingPinKeys]);
+
 
   const missingHouseId = files.filter((f) => !f.columns.some((c) => c.field === "house_id"));
   const ownerName = people.find((p) => p.id === owner)?.name ?? "—";
