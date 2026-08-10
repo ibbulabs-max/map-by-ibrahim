@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { useApplyImport } from "@/hooks/useImportData";
 import { useHouses } from "@/hooks/useHouses";
+import { usePins } from "@/hooks/usePins";
+
 import {
   APP_FIELDS,
   parseSpreadsheet,
