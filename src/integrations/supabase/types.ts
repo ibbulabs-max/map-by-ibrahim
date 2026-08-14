@@ -41,6 +41,63 @@ export type Database = {
         }
         Relationships: []
       }
+      follow_ups: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          due_date: string
+          house_uuid: string
+          id: string
+          member_uuid: string | null
+          notes: string | null
+          reason: string | null
+          risk_level: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          due_date: string
+          house_uuid: string
+          id?: string
+          member_uuid?: string | null
+          notes?: string | null
+          reason?: string | null
+          risk_level?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          due_date?: string
+          house_uuid?: string
+          id?: string
+          member_uuid?: string | null
+          notes?: string | null
+          reason?: string | null
+          risk_level?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "follow_ups_house_uuid_fkey"
+            columns: ["house_uuid"]
+            isOneToOne: false
+            referencedRelation: "houses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "follow_ups_member_uuid_fkey"
+            columns: ["member_uuid"]
+            isOneToOne: false
+            referencedRelation: "house_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       house_members: {
         Row: {
           created_at: string
@@ -94,11 +151,13 @@ export type Database = {
       houses: {
         Row: {
           accuracy: number | null
+          address: string | null
           assigned_csw_id: string | null
           created_at: string
           created_by: string | null
           custom_type: string | null
           data: Json
+          earning_members: number | null
           house_id: string
           house_number: string | null
           id: string
@@ -108,22 +167,27 @@ export type Database = {
           longitude: number | null
           mapped_at: string | null
           mapped_by: string | null
+          monthly_income: number | null
+          owner_name: string | null
           pin_id: string | null
           pin_type: string
           source_files: Json
           status: string | null
           supervisor_id: string | null
+          total_members: number | null
           updated_at: string
           uploaded_at: string | null
           uploaded_by: string | null
         }
         Insert: {
           accuracy?: number | null
+          address?: string | null
           assigned_csw_id?: string | null
           created_at?: string
           created_by?: string | null
           custom_type?: string | null
           data?: Json
+          earning_members?: number | null
           house_id: string
           house_number?: string | null
           id?: string
@@ -133,22 +197,27 @@ export type Database = {
           longitude?: number | null
           mapped_at?: string | null
           mapped_by?: string | null
+          monthly_income?: number | null
+          owner_name?: string | null
           pin_id?: string | null
           pin_type?: string
           source_files?: Json
           status?: string | null
           supervisor_id?: string | null
+          total_members?: number | null
           updated_at?: string
           uploaded_at?: string | null
           uploaded_by?: string | null
         }
         Update: {
           accuracy?: number | null
+          address?: string | null
           assigned_csw_id?: string | null
           created_at?: string
           created_by?: string | null
           custom_type?: string | null
           data?: Json
+          earning_members?: number | null
           house_id?: string
           house_number?: string | null
           id?: string
@@ -158,11 +227,14 @@ export type Database = {
           longitude?: number | null
           mapped_at?: string | null
           mapped_by?: string | null
+          monthly_income?: number | null
+          owner_name?: string | null
           pin_id?: string | null
           pin_type?: string
           source_files?: Json
           status?: string | null
           supervisor_id?: string | null
+          total_members?: number | null
           updated_at?: string
           uploaded_at?: string | null
           uploaded_by?: string | null
@@ -352,6 +424,132 @@ export type Database = {
           username?: string
         }
         Relationships: []
+      }
+      member_assessments: {
+        Row: {
+          alcohol: string | null
+          alcohol_frequency: string | null
+          assessed_at: string
+          assessed_by: string | null
+          available: boolean
+          blood_sugar: number | null
+          bmi: number | null
+          bmi_category: string | null
+          bp_symptoms: Json
+          created_at: string
+          diastolic: number | null
+          extra: Json
+          height_cm: number | null
+          house_uuid: string
+          id: string
+          known_history: Json
+          medical_details: string | null
+          medication: Json
+          member_uuid: string
+          notes: string | null
+          physical_activity: string | null
+          referral: Json
+          referral_needed: boolean
+          risk_level: string
+          risk_reasons: Json
+          smoking: string | null
+          smoking_frequency: string | null
+          sugar_symptoms: Json
+          systolic: number | null
+          tobacco: string | null
+          tobacco_frequency: string | null
+          updated_at: string
+          waist: string | null
+          weight_kg: number | null
+        }
+        Insert: {
+          alcohol?: string | null
+          alcohol_frequency?: string | null
+          assessed_at?: string
+          assessed_by?: string | null
+          available?: boolean
+          blood_sugar?: number | null
+          bmi?: number | null
+          bmi_category?: string | null
+          bp_symptoms?: Json
+          created_at?: string
+          diastolic?: number | null
+          extra?: Json
+          height_cm?: number | null
+          house_uuid: string
+          id?: string
+          known_history?: Json
+          medical_details?: string | null
+          medication?: Json
+          member_uuid: string
+          notes?: string | null
+          physical_activity?: string | null
+          referral?: Json
+          referral_needed?: boolean
+          risk_level?: string
+          risk_reasons?: Json
+          smoking?: string | null
+          smoking_frequency?: string | null
+          sugar_symptoms?: Json
+          systolic?: number | null
+          tobacco?: string | null
+          tobacco_frequency?: string | null
+          updated_at?: string
+          waist?: string | null
+          weight_kg?: number | null
+        }
+        Update: {
+          alcohol?: string | null
+          alcohol_frequency?: string | null
+          assessed_at?: string
+          assessed_by?: string | null
+          available?: boolean
+          blood_sugar?: number | null
+          bmi?: number | null
+          bmi_category?: string | null
+          bp_symptoms?: Json
+          created_at?: string
+          diastolic?: number | null
+          extra?: Json
+          height_cm?: number | null
+          house_uuid?: string
+          id?: string
+          known_history?: Json
+          medical_details?: string | null
+          medication?: Json
+          member_uuid?: string
+          notes?: string | null
+          physical_activity?: string | null
+          referral?: Json
+          referral_needed?: boolean
+          risk_level?: string
+          risk_reasons?: Json
+          smoking?: string | null
+          smoking_frequency?: string | null
+          sugar_symptoms?: Json
+          systolic?: number | null
+          tobacco?: string | null
+          tobacco_frequency?: string | null
+          updated_at?: string
+          waist?: string | null
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_assessments_house_uuid_fkey"
+            columns: ["house_uuid"]
+            isOneToOne: false
+            referencedRelation: "houses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_assessments_member_uuid_fkey"
+            columns: ["member_uuid"]
+            isOneToOne: true
+            referencedRelation: "house_members"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pins: {
         Row: {
